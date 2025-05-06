@@ -9,8 +9,11 @@ A modern and user-friendly inventory management system built with PyQt6, designe
 - **Inventory Management**: Track and manage your products
 - **Add Products**: Add new products to your inventory with LPS currency support
 - **Update Products**: Safely update product details (name, quantity, cost, price) with a dedicated tab
-- **Sorting and Refresh**: Sort inventory by any column and refresh the view with a single click
+- **Sorting and Refresh**: Sort inventory and clients by any column (ASC/DESC) and refresh the view with a single click
 - **Customer Management**: Maintain customer information and history
+- **Add Clients**: Add new clients with validation for unique ID and RTN
+- **Update Clients**: Search and update client information with a dedicated tab
+- **Test Data**: The system auto-populates with 30 sample clients and 20 products for testing/demo
 - **Sales Tracking**: Monitor and analyze sales data
 - **Invoice Generation**: Create and manage invoices easily
 - **Localized Currency**: All cost and price fields use LPS (Lempiras) for compatibility with local businesses
@@ -41,6 +44,29 @@ _Add new products with LPS currency_
 
 ![Update Product Tab](screenshots/update_product.png)
 _Update existing products safely_
+
+### Clients Tab
+
+![Clients Tab](screenshots/clients.png)
+_Manage clients with search, sorting, and test data_
+
+### Add Client Tab
+
+![Add Client Tab](screenshots/add_client.png)
+_Add new clients with validation_
+
+### Update Client Tab
+
+![Update Client Tab](screenshots/update_client.png)
+_Update client information easily_
+
+## Client Management
+
+- **Clients Tab**: View all clients in a sortable, searchable table. Sort by ID, name, RTN, city, and more (ASC/DESC).
+- **Add Client Tab**: Add new clients with required fields (Name, ID Personal, City) and unique constraints (ID Personal, RTN).
+- **Update Client Tab**: Search for clients by name, ID, or RTN and update their information.
+- **Test Data**: On first run, the system auto-populates with 30 realistic sample clients for demonstration and testing.
+- **Validation**: Prevents duplicate IDs and RTNs, and provides user feedback for errors.
 
 ## Benefits for Your Business
 
