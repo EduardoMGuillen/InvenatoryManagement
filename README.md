@@ -7,9 +7,13 @@ A modern and user-friendly inventory management system built with PyQt6, designe
 - **Modern User Interface**: Clean and intuitive design with a professional look
 - **Secure Login System**: Protected access to business data
 - **Inventory Management**: Track and manage your products
+- **Add Products**: Add new products to your inventory with LPS currency support
+- **Update Products**: Safely update product details (name, quantity, cost, price) with a dedicated tab
+- **Sorting and Refresh**: Sort inventory by any column and refresh the view with a single click
 - **Customer Management**: Maintain customer information and history
 - **Sales Tracking**: Monitor and analyze sales data
 - **Invoice Generation**: Create and manage invoices easily
+- **Localized Currency**: All cost and price fields use LPS (Lempiras) for compatibility with local businesses
 
 ## Screenshots
 
@@ -23,6 +27,21 @@ _Secure login interface with modern design_
 ![Main Dashboard](screenshots/dashboard.png)
 _Main application interface with navigation menu_
 
+### Inventory Tab
+
+![Inventory Tab](screenshots/inventory.png)
+_Inventory management with sorting, search, and LPS currency_
+
+### Add Product Tab
+
+![Add Product Tab](screenshots/add_product.png)
+_Add new products with LPS currency_
+
+### Update Product Tab
+
+![Update Product Tab](screenshots/update_product.png)
+_Update existing products safely_
+
 ## Benefits for Your Business
 
 - **Streamlined Operations**: Manage all aspects of your business from a single application
@@ -30,6 +49,7 @@ _Main application interface with navigation menu_
 - **Better Organization**: Keep track of products, sales, and customer data in one place
 - **Professional Invoicing**: Generate professional invoices for your customers
 - **Data Security**: Secure login system to protect your business information
+- **Localized for Honduras**: LPS currency support for accurate financial management
 
 ## Technical Details
 
