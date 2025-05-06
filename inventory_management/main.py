@@ -1,9 +1,189 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                            QHBoxLayout, QPushButton, QTabWidget, QLabel, QTabBar)
+                            QHBoxLayout, QPushButton, QTabWidget, QLabel, QTabBar,
+                            QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
+                            QHeaderView, QMessageBox, QFormLayout, QSpinBox, QDoubleSpinBox, QStyledItemDelegate)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QIcon
 from login import LoginWindow
+from database import Database
+
+class CurrencyDelegate(QStyledItemDelegate):
+    def displayText(self, value, locale):
+        try:
+            number = float(value)
+            return f"LPS {number:,.2f}"
+        except Exception:
+            return str(value)
+
+class InventoryTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        
+        # Top bar with search and refresh
+        top_bar = QHBoxLayout()
+        
+        # Search section
+        search_layout = QHBoxLayout()
+        
+        # Search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Buscar producto...")
+        self.search_bar.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 300px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #3498db;
+            }
+        """)
+        self.search_bar.textChanged.connect(self.search_products)
+        
+        # Search type dropdown
+        self.search_type = QComboBox()
+        self.search_type.addItems(["Nombre", "Número de Serie", "ID"])
+        self.search_type.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 150px;
+            }
+            QComboBox:focus {
+                border: 2px solid #3498db;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: url(icons/down-arrow.png);
+                width: 12px;
+                height: 12px;
+            }
+        """)
+        self.search_type.currentTextChanged.connect(self.search_products)
+        
+        search_layout.addWidget(self.search_bar)
+        search_layout.addWidget(self.search_type)
+        
+        # Refresh button
+        self.refresh_btn = QPushButton("Refrescar")
+        self.refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #219150;
+            }
+        """)
+        self.refresh_btn.clicked.connect(self.load_products)
+        
+        top_bar.addLayout(search_layout)
+        top_bar.addWidget(self.refresh_btn)
+        top_bar.addStretch()
+        
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels([
+            "ID", "Número de Serie", "Nombre del Producto",
+            "Cantidad", "Costo (LPS)", "Precio (LPS)"
+        ])
+        
+        # Set table style
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                background-color: white;
+                gridline-color: #f0f0f0;
+                color: #2c3e50;
+            }
+            QTableWidget::item {
+                padding: 5px;
+                color: #2c3e50;
+                background: white;
+            }
+            QTableWidget::item:alternate {
+                background: #f7f9fa;
+            }
+            QTableWidget::item:selected {
+                background: #d0e7fa;
+                color: #2c3e50;
+            }
+            QHeaderView::section {
+                background-color: #e0e4ea;
+                color: #2c3e50;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid #bdc3c7;
+                font-weight: bold;
+            }
+        """)
+        
+        # Configure table properties
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+        
+        # Set custom delegate for Costo and Precio columns
+        currency_delegate = CurrencyDelegate(self.table)
+        self.table.setItemDelegateForColumn(4, currency_delegate)
+        self.table.setItemDelegateForColumn(5, currency_delegate)
+        
+        # Add widgets to main layout
+        layout.addLayout(top_bar)
+        layout.addWidget(self.table)
+        
+        # Load initial data
+        self.load_products()
+    
+    def load_products(self):
+        """Load all products from the database."""
+        products = self.db.get_all_products()
+        self.update_table(products)
+    
+    def search_products(self):
+        """Search products based on the search term and type."""
+        search_term = self.search_bar.text()
+        search_type = self.search_type.currentText()
+        
+        if search_term:
+            products = self.db.search_products(search_term, search_type)
+        else:
+            products = self.db.get_all_products()
+        
+        self.update_table(products)
+    
+    def update_table(self, products):
+        """Update the table with the given products."""
+        self.table.setRowCount(len(products))
+        for row, product in enumerate(products):
+            for col, value in enumerate(product):
+                item = QTableWidgetItem()
+                # Numeric columns: 0 (ID), 3 (Cantidad), 4 (Costo), 5 (Precio)
+                if col in [0, 3]:
+                    item.setData(Qt.ItemDataRole.DisplayRole, int(value))
+                elif col in [4, 5]:
+                    item.setData(Qt.ItemDataRole.DisplayRole, float(value))
+                else:
+                    item.setText(str(value))
+                self.table.setItem(row, col, item)
 
 class WelcomeTab(QWidget):
     def __init__(self):
@@ -31,6 +211,285 @@ class WelcomeTab(QWidget):
         
         layout.addWidget(welcome_label)
         layout.addWidget(subtitle_label)
+
+class AddProductTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        form_layout = QFormLayout()
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignHCenter)
+        form_layout.setHorizontalSpacing(20)
+        form_layout.setVerticalSpacing(15)
+
+        # Serial Number
+        self.serial_input = QLineEdit()
+        self.serial_input.setPlaceholderText("Ej: SN2001")
+        form_layout.addRow("Número de Serie:", self.serial_input)
+
+        # Product Name
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Ej: Taladro Inalámbrico")
+        form_layout.addRow("Nombre del Producto:", self.name_input)
+
+        # Quantity
+        self.quantity_input = QSpinBox()
+        self.quantity_input.setRange(1, 100000)
+        form_layout.addRow("Cantidad:", self.quantity_input)
+
+        # Cost
+        self.cost_input = QDoubleSpinBox()
+        self.cost_input.setRange(0.01, 100000.00)
+        self.cost_input.setPrefix("LPS ")
+        self.cost_input.setDecimals(2)
+        form_layout.addRow("Costo (LPS):", self.cost_input)
+
+        # Price
+        self.price_input = QDoubleSpinBox()
+        self.price_input.setRange(0.01, 100000.00)
+        self.price_input.setPrefix("LPS ")
+        self.price_input.setDecimals(2)
+        form_layout.addRow("Precio (LPS):", self.price_input)
+
+        # Add Button
+        self.add_btn = QPushButton("Añadir Producto")
+        self.add_btn.clicked.connect(self.add_product)
+        self.add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-size: 15px;
+            }
+            QPushButton:hover {
+                background-color: #217dbb;
+            }
+        """)
+
+        # Feedback label
+        self.feedback = QLabel("")
+        self.feedback.setStyleSheet("color: #27ae60; font-weight: bold; margin-top: 10px;")
+
+        layout.addLayout(form_layout)
+        layout.addWidget(self.add_btn)
+        layout.addWidget(self.feedback)
+        layout.addStretch()
+
+    def add_product(self):
+        serial = self.serial_input.text().strip()
+        name = self.name_input.text().strip()
+        quantity = self.quantity_input.value()
+        cost = self.cost_input.value()
+        price = self.price_input.value()
+
+        if not serial or not name or cost <= 0 or price <= 0:
+            self.feedback.setText("Por favor, complete todos los campos correctamente.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+            return
+
+        # Check if product exists
+        existing = self.db.search_products(serial, "Número de Serie")
+        if existing:
+            self.feedback.setText("Error: El número de serie ya existe. Use 'Actualizar producto' para modificarlo.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+            return
+
+        added = self.db.add_product(serial, name, quantity, cost, price)
+        if added:
+            self.feedback.setText(f"Producto '{name}' añadido exitosamente.")
+            self.feedback.setStyleSheet("color: #27ae60; font-weight: bold; margin-top: 10px;")
+            self.clear_form()
+        else:
+            self.feedback.setText("Error al añadir el producto.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+
+    def clear_form(self):
+        self.serial_input.clear()
+        self.name_input.clear()
+        self.quantity_input.setValue(1)
+        self.cost_input.setValue(0.00)
+        self.price_input.setValue(0.00)
+
+class UpdateProductTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # Search section
+        search_layout = QHBoxLayout()
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Buscar producto...")
+        self.search_bar.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 300px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #3498db;
+            }
+        """)
+        self.search_type = QComboBox()
+        self.search_type.addItems(["Nombre", "Número de Serie", "ID"])
+        self.search_type.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 150px;
+            }
+            QComboBox:focus {
+                border: 2px solid #3498db;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: url(icons/down-arrow.png);
+                width: 12px;
+                height: 12px;
+            }
+        """)
+        self.search_btn = QPushButton("Buscar")
+        self.search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #217dbb;
+            }
+        """)
+        self.search_btn.clicked.connect(self.load_product)
+        search_layout.addWidget(self.search_bar)
+        search_layout.addWidget(self.search_type)
+        search_layout.addWidget(self.search_btn)
+        search_layout.addStretch()
+
+        # Form for editing
+        self.form_layout = QFormLayout()
+        self.form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self.form_layout.setFormAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.form_layout.setHorizontalSpacing(20)
+        self.form_layout.setVerticalSpacing(15)
+
+        self.id_label = QLabel("")
+        self.id_label.setStyleSheet("color: #7f8c8d; font-size: 13px;")
+        self.serial_input = QLineEdit()
+        self.name_input = QLineEdit()
+        self.quantity_input = QSpinBox()
+        self.quantity_input.setRange(0, 100000)
+        self.cost_input = QDoubleSpinBox()
+        self.cost_input.setRange(0.01, 100000.00)
+        self.cost_input.setPrefix("LPS ")
+        self.cost_input.setDecimals(2)
+        self.price_input = QDoubleSpinBox()
+        self.price_input.setRange(0.01, 100000.00)
+        self.price_input.setPrefix("LPS ")
+        self.price_input.setDecimals(2)
+
+        self.form_layout.addRow("ID:", self.id_label)
+        self.form_layout.addRow("Número de Serie:", self.serial_input)
+        self.form_layout.addRow("Nombre del Producto:", self.name_input)
+        self.form_layout.addRow("Cantidad:", self.quantity_input)
+        self.form_layout.addRow("Costo (LPS):", self.cost_input)
+        self.form_layout.addRow("Precio (LPS):", self.price_input)
+
+        # Update Button
+        self.update_btn = QPushButton("Actualizar Producto")
+        self.update_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-size: 15px;
+            }
+            QPushButton:hover {
+                background-color: #219150;
+            }
+        """)
+        self.update_btn.clicked.connect(self.update_product)
+        self.update_btn.setEnabled(False)
+
+        # Feedback label
+        self.feedback = QLabel("")
+        self.feedback.setStyleSheet("color: #27ae60; font-weight: bold; margin-top: 10px;")
+
+        layout.addLayout(search_layout)
+        layout.addLayout(self.form_layout)
+        layout.addWidget(self.update_btn)
+        layout.addWidget(self.feedback)
+        layout.addStretch()
+
+    def load_product(self):
+        search_term = self.search_bar.text().strip()
+        search_type = self.search_type.currentText()
+        if not search_term:
+            self.feedback.setText("Ingrese un término de búsqueda.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+            self.update_btn.setEnabled(False)
+            return
+        products = self.db.search_products(search_term, search_type)
+        if not products:
+            self.feedback.setText("Producto no encontrado.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+            self.update_btn.setEnabled(False)
+            self.clear_form()
+            return
+        prod = products[0]
+        self.id_label.setText(str(prod[0]))
+        self.serial_input.setText(prod[1])
+        self.name_input.setText(prod[2])
+        self.quantity_input.setValue(prod[3])
+        self.cost_input.setValue(prod[4])
+        self.price_input.setValue(prod[5])
+        self.feedback.setText("Producto cargado. Puede editar los campos y actualizar.")
+        self.feedback.setStyleSheet("color: #2980b9; font-weight: bold; margin-top: 10px;")
+        self.update_btn.setEnabled(True)
+
+    def update_product(self):
+        try:
+            product_id = int(self.id_label.text())
+        except ValueError:
+            self.feedback.setText("ID de producto inválido.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+            return
+        serial = self.serial_input.text().strip()
+        name = self.name_input.text().strip()
+        quantity = self.quantity_input.value()
+        cost = self.cost_input.value()
+        price = self.price_input.value()
+        if not serial or not name or cost <= 0 or price <= 0:
+            self.feedback.setText("Por favor, complete todos los campos correctamente.")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+            return
+        updated = self.db.update_product(product_id, serial, name, quantity, cost, price)
+        if updated:
+            self.feedback.setText("Producto actualizado exitosamente.")
+            self.feedback.setStyleSheet("color: #27ae60; font-weight: bold; margin-top: 10px;")
+        else:
+            self.feedback.setText("Error al actualizar el producto. ¿El número de serie ya existe?")
+            self.feedback.setStyleSheet("color: #e74c3c; font-weight: bold; margin-top: 10px;")
+
+    def clear_form(self):
+        self.id_label.setText("")
+        self.serial_input.clear()
+        self.name_input.clear()
+        self.quantity_input.setValue(0)
+        self.cost_input.setValue(0.00)
+        self.price_input.setValue(0.00)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -73,7 +532,7 @@ class MainWindow(QMainWindow):
         
         # Add menu buttons
         self.menu_buttons = {}
-        menu_items = ["Inventario", "Clientes", "Generar Factura", "Ventas"]
+        menu_items = ["Inventario", "Añadir producto", "Actualizar producto", "Clientes", "Generar Factura", "Ventas"]
         
         for item in menu_items:
             btn = QPushButton(item)
@@ -132,10 +591,17 @@ class MainWindow(QMainWindow):
                 self.tab_widget.setCurrentIndex(i)
                 return
         
-        # Create new tab
-        new_tab = QWidget()
-        layout = QVBoxLayout(new_tab)
-        layout.addWidget(QLabel(f"Contenido de {title}"))
+        # Create new tab based on title
+        if title == "Inventario":
+            new_tab = InventoryTab()
+        elif title == "Añadir producto":
+            new_tab = AddProductTab()
+        elif title == "Actualizar producto":
+            new_tab = UpdateProductTab()
+        else:
+            new_tab = QWidget()
+            layout = QVBoxLayout(new_tab)
+            layout.addWidget(QLabel(f"Contenido de {title}"))
         
         # Add tab
         index = self.tab_widget.addTab(new_tab, title)
