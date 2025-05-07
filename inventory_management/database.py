@@ -299,4 +299,29 @@ class Database:
         with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
-            return cursor.fetchone() 
+            return cursor.fetchone()
+
+    def search_invoices(self, search_term, search_type):
+        """Search invoices based on the search term and type."""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            if search_type == "Cliente":
+                cursor.execute("SELECT * FROM invoices WHERE client_name LIKE ?", (f"%{search_term}%",))
+            else:  # ID Factura
+                try:
+                    invoice_id = int(search_term)
+                    cursor.execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+                except ValueError:
+                    return []
+            return cursor.fetchall()
+
+    def delete_invoice(self, invoice_id):
+        """Delete an invoice from the database."""
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+                conn.commit()
+                return True
+        except sqlite3.Error:
+            return False 

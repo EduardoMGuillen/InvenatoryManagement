@@ -2,9 +2,10 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QTabWidget, QLabel, QTabBar,
                             QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
-                            QHeaderView, QMessageBox, QFormLayout, QSpinBox, QDoubleSpinBox, QStyledItemDelegate)
+                            QHeaderView, QMessageBox, QFormLayout, QSpinBox, QDoubleSpinBox, 
+                            QStyledItemDelegate, QDialog)
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont, QIcon, QTextDocument, QPainter
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from login import LoginWindow
 from database import Database
@@ -1109,6 +1110,337 @@ class GenerateInvoiceTab(QWidget):
         self.feedback.setText(f"Factura generada: {filename}")
         self.selected_products.clear()
         self.update_invoice_table()
+
+class ManageInvoicesTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        
+        # Search section
+        search_layout = QHBoxLayout()
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Buscar factura...")
+        self.search_bar.setStyleSheet("""
+            QLineEdit {
+                padding: 8px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 300px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #3498db;
+            }
+        """)
+        self.search_bar.textChanged.connect(self.search_invoices)
+        self.search_type = QComboBox()
+        self.search_type.addItems(["Cliente", "ID Factura"])
+        self.search_type.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                font-size: 14px;
+                min-width: 150px;
+            }
+            QComboBox:focus {
+                border: 2px solid #3498db;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: url(icons/down-arrow.png);
+                width: 12px;
+                height: 12px;
+            }
+        """)
+        self.search_type.currentTextChanged.connect(self.search_invoices)
+        search_layout.addWidget(self.search_bar)
+        search_layout.addWidget(self.search_type)
+        self.refresh_btn = QPushButton("Refrescar")
+        self.refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #219150;
+            }
+        """)
+        self.refresh_btn.clicked.connect(self.load_invoices)
+        search_layout.addWidget(self.refresh_btn)
+        search_layout.addStretch()
+        layout.addLayout(search_layout)
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels([
+            "ID", "Cliente", "Fecha", "Subtotal", "ISV", "Total"
+        ])
+        self.table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #bdc3c7;
+                border-radius: 4px;
+                background-color: white;
+                gridline-color: #f0f0f0;
+                color: #2c3e50;
+            }
+            QTableWidget::item {
+                padding: 5px;
+                color: #2c3e50;
+                background: white;
+            }
+            QTableWidget::item:alternate {
+                background: #f7f9fa;
+            }
+            QTableWidget::item:selected {
+                background: #d0e7fa;
+                color: #2c3e50;
+            }
+            QHeaderView::section {
+                background-color: #e0e4ea;
+                color: #2c3e50;
+                padding: 8px;
+                border: none;
+                border-bottom: 1px solid #bdc3c7;
+                font-weight: bold;
+            }
+        """)
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+        layout.addWidget(self.table)
+        # Action buttons (single set)
+        btn_layout = QHBoxLayout()
+        self.view_btn = QPushButton("Ver")
+        self.view_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #1c5d99;
+            }
+        """)
+        self.view_btn.clicked.connect(self.view_invoice)
+        btn_layout.addWidget(self.view_btn)
+        self.print_btn = QPushButton("Imprimir")
+        self.print_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #217dbb;
+            }
+        """)
+        self.print_btn.clicked.connect(self.print_invoice)
+        btn_layout.addWidget(self.print_btn)
+        self.delete_btn = QPushButton("Eliminar")
+        self.delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.delete_btn.clicked.connect(self.delete_invoice)
+        btn_layout.addWidget(self.delete_btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        # Invoice display (white canvas)
+        self.invoice_display = QLabel("")
+        self.invoice_display.setStyleSheet("""
+            QLabel {
+                background: #fff;
+                border: 1px solid #ccc;
+                padding: 20px;
+                font-family: monospace;
+                color: #222;
+                min-height: 200px;
+            }
+        """)
+        self.invoice_display.setWordWrap(True)
+        layout.addWidget(self.invoice_display)
+        self.setLayout(layout)
+        self.load_invoices()
+    def load_invoices(self):
+        invoices = self.db.get_all_invoices()
+        self.update_table(invoices)
+    def search_invoices(self):
+        search_term = self.search_bar.text()
+        search_type = self.search_type.currentText()
+        if search_term:
+            invoices = self.db.search_invoices(search_term, search_type)
+        else:
+            invoices = self.db.get_all_invoices()
+        self.update_table(invoices)
+    def update_table(self, invoices):
+        self.table.setRowCount(len(invoices))
+        self.table.clearContents()
+        for row, invoice in enumerate(invoices):
+            for col, value in enumerate(invoice[:-1]):  # Exclude file_path
+                item = QTableWidgetItem()
+                if col == 0:  # ID
+                    item.setData(Qt.ItemDataRole.DisplayRole, int(value))
+                elif col == 2:  # Date
+                    item.setText(str(value))
+                elif col in [3, 4, 5]:  # Subtotal, ISV, Total
+                    try:
+                        float_value = float(value)
+                        item.setData(Qt.ItemDataRole.DisplayRole, float_value)
+                        item.setText(f"LPS {float_value:,.2f}")
+                    except (ValueError, TypeError):
+                        item.setText(str(value))
+                else:  # Client name
+                    item.setText(str(value))
+                self.table.setItem(row, col, item)
+    def get_selected_invoice(self):
+        selected = self.table.currentRow()
+        if selected < 0:
+            return None
+        # Get the invoice ID from the first column
+        invoice_id = int(self.table.item(selected, 0).text())
+        invoice = self.db.get_invoice_by_id(invoice_id)
+        return invoice
+    def view_invoice(self):
+        invoice = self.get_selected_invoice()
+        if not invoice:
+            self.invoice_display.setText("Seleccione una factura para ver.")
+            return
+        file_path = invoice[-1]
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            self.invoice_display.setText(content)
+        except Exception as e:
+            self.invoice_display.setText(f"No se pudo abrir la factura: {e}")
+    def print_invoice(self):
+        invoice = self.get_selected_invoice()
+        if not invoice:
+            QMessageBox.warning(self, "Imprimir", "Seleccione una factura para imprimir.")
+            return
+        file_path = invoice[-1]
+        try:
+            # Load invoice text
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            # Parse invoice data from text (simple parsing for demo)
+            lines = content.splitlines()
+            factura_num = lines[0].split(':', 1)[-1].strip()
+            fecha = lines[1].split(':', 1)[-1].strip()
+            cliente = lines[2].split(':', 1)[-1].strip()
+            # Find product table start
+            prod_start = 5
+            prod_lines = []
+            for i in range(prod_start+1, len(lines)):
+                if lines[i].strip() == '':
+                    break
+                prod_lines.append(lines[i])
+            # Totals
+            subtotal = lines[-3].split(':', 1)[-1].strip()
+            isv = lines[-2].split(':', 1)[-1].strip()
+            total = lines[-1].split(':', 1)[-1].strip()
+            # Build HTML
+            html = f'''
+            <html>
+            <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; color: #222; }}
+                .header {{ font-size: 22px; font-weight: bold; margin-bottom: 10px; }}
+                .meta {{ margin-bottom: 10px; }}
+                .meta span {{ margin-right: 30px; }}
+                table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+                th, td {{ border: 1px solid #ccc; padding: 6px 10px; text-align: left; }}
+                th {{ background: #f0f0f0; }}
+                .totals td {{ border: none; font-size: 16px; }}
+                .totals tr td:first-child {{ text-align: right; }}
+            </style>
+            </head>
+            <body>
+                <div class="header">Factura N°: {factura_num}</div>
+                <div class="meta">
+                    <span><b>Fecha:</b> {fecha}</span>
+                    <span><b>Cliente:</b> {cliente}</span>
+                </div>
+                <table>
+                    <tr><th>Cantidad</th><th>Nombre</th><th>N° Serie</th><th>Precio</th><th>Subtotal</th></tr>
+            '''
+            for prod in prod_lines:
+                cols = prod.split()
+                if len(cols) < 5:
+                    continue
+                qty = cols[0]
+                name = ' '.join(cols[1:-3])
+                serial = cols[-3]
+                price = cols[-2] + ' ' + cols[-1] if cols[-2].startswith('LPS') else cols[-2]
+                subtotal = cols[-1] if cols[-1].startswith('LPS') else ''
+                html += f'<tr><td>{qty}</td><td>{name}</td><td>{serial}</td><td>{price}</td><td>{subtotal}</td></tr>'
+            html += f'''
+                </table>
+                <table class="totals">
+                    <tr><td><b>Subtotal:</b></td><td>{subtotal}</td></tr>
+                    <tr><td><b>ISV (15%):</b></td><td>{isv}</td></tr>
+                    <tr><td><b>Total:</b></td><td>{total}</td></tr>
+                </table>
+            </body>
+            </html>
+            '''
+            doc = QTextDocument()
+            doc.setHtml(html)
+            printer = QPrinter()
+            dialog = QPrintDialog(printer)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                painter = QPainter(printer)
+                doc.drawContents(painter)
+                painter.end()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al imprimir la factura: {str(e)}")
+    def delete_invoice(self):
+        invoice = self.get_selected_invoice()
+        if not invoice:
+            QMessageBox.warning(self, "Eliminar", "Seleccione una factura para eliminar.")
+            return
+        reply = QMessageBox.question(
+            self, 'Confirmar eliminación',
+            f'¿Está seguro que desea eliminar la factura #{invoice[0]}?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                import os
+                file_path = invoice[-1]
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                if self.db.delete_invoice(invoice[0]):
+                    self.load_invoices()
+                    self.invoice_display.setText("")
+                    QMessageBox.information(self, "Éxito", "Factura eliminada correctamente.")
+                else:
+                    QMessageBox.critical(self, "Error", "Error al eliminar la factura de la base de datos.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Error al eliminar la factura: {str(e)}")
 
 class MainWindow(QMainWindow):
     def __init__(self):
