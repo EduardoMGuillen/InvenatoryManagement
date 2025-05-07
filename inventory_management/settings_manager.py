@@ -21,6 +21,13 @@ class SettingsManager(QObject):
             "company_email": "contacto@empresa.com",
             "company_rtn": "0000-000000-000-0",
             
+            # Currency Settings
+            "currency": "LPS",
+            "currency_symbol": "L",
+            "currency_position": "before",  # before or after
+            "decimal_separator": ".",
+            "thousands_separator": ",",
+            
             # Invoice Settings
             "tax_rate": 15.0,
             "invoice_prefix": "FAC",

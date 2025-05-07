@@ -340,4 +340,35 @@ class Database:
         with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM invoices WHERE client_id = ? ORDER BY date ASC", (client_id,))
-            return cursor.fetchall() 
+            return cursor.fetchall()
+
+    def process_invoice_and_update_stock(self, client_id, client_name, date, items, subtotal, tax, total, file_path):
+        """
+        items: list of dicts with keys: product_id, quantity
+        Returns (True, invoice_id) on success, (False, error_message) on failure.
+        """
+        try:
+            with sqlite3.connect(self.db_name) as conn:
+                cursor = conn.cursor()
+                # Check stock for all items
+                for item in items:
+                    cursor.execute("SELECT quantity, name FROM products WHERE id = ?", (item['product_id'],))
+                    row = cursor.fetchone()
+                    if row is None:
+                        return False, f"Producto con ID {item['product_id']} no encontrado."
+                    available_qty, prod_name = row
+                    if item['quantity'] > available_qty:
+                        return False, f"Stock insuficiente para '{prod_name}'. Disponible: {available_qty}, solicitado: {item['quantity']}"
+                # Subtract quantities
+                for item in items:
+                    cursor.execute("UPDATE products SET quantity = quantity - ? WHERE id = ?", (item['quantity'], item['product_id']))
+                # Add invoice
+                cursor.execute("""
+                    INSERT INTO invoices (client_id, client_name, date, subtotal, tax, total, file_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (client_id, client_name, date, subtotal, tax, total, file_path))
+                invoice_id = cursor.lastrowid
+                conn.commit()
+                return True, invoice_id
+        except Exception as e:
+            return False, str(e) 

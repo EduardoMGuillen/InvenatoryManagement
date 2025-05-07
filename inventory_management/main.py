@@ -12,6 +12,7 @@ from login import LoginWindow
 from database import Database
 from settings_manager import SettingsManager
 from backup_manager import BackupManager
+from currency_formatter import CurrencyFormatter
 
 class CurrencyDelegate(QStyledItemDelegate):
     def displayText(self, value, locale):
@@ -946,9 +947,11 @@ class UpdateClientTab(QWidget):
         self.city_input.clear()
 
 class GenerateInvoiceTab(QWidget):
-    def __init__(self):
+    def __init__(self, settings_manager):
         super().__init__()
         self.db = Database()
+        self.settings_manager = settings_manager
+        self.currency_formatter = CurrencyFormatter(settings_manager)
         layout = QVBoxLayout(self)
         layout.setSpacing(20)
         # --- Client selection ---
@@ -962,7 +965,7 @@ class GenerateInvoiceTab(QWidget):
         self.products_table = QTableWidget()
         self.products_table.setColumnCount(6)
         self.products_table.setHorizontalHeaderLabels([
-            "ID", "Nombre", "Número de Serie", "Precio (LPS)", "Disponible", "Cantidad"
+            "ID", "Nombre", "Número de Serie", "Precio", "Disponible", "Cantidad"
         ])
         self.products_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.products_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -975,9 +978,9 @@ class GenerateInvoiceTab(QWidget):
         layout.addWidget(self.add_btn)
         # --- Invoice preview ---
         self.invoice_table = QTableWidget()
-        self.invoice_table.setColumnCount(5)
+        self.invoice_table.setColumnCount(6)
         self.invoice_table.setHorizontalHeaderLabels([
-            "ID", "Nombre", "Cantidad", "Precio Unitario", "Subtotal"
+            "ID", "Nombre", "Número de Serie", "Cantidad", "Precio Unitario", "Subtotal"
         ])
         self.invoice_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.invoice_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -985,9 +988,9 @@ class GenerateInvoiceTab(QWidget):
         layout.addWidget(self.invoice_table)
         # --- Totals ---
         totals_layout = QHBoxLayout()
-        self.subtotal_label = QLabel("Subtotal: LPS 0.00")
-        self.tax_label = QLabel("ISV (15%): LPS 0.00")
-        self.total_label = QLabel("Total: LPS 0.00")
+        self.subtotal_label = QLabel("Subtotal: 0.00")
+        self.tax_label = QLabel("ISV (15%): 0.00")
+        self.total_label = QLabel("Total: 0.00")
         totals_layout.addWidget(self.subtotal_label)
         totals_layout.addWidget(self.tax_label)
         totals_layout.addWidget(self.total_label)
@@ -1003,26 +1006,23 @@ class GenerateInvoiceTab(QWidget):
         self.setLayout(layout)
         self.selected_products = []  # (product_id, name, serial, qty, price, subtotal)
         self.load_products()
-    def load_clients(self):
-        self.client_combo.clear()
-        clients = self.db.get_all_clients()
-        for c in clients:
-            self.client_combo.addItem(f"{c[1]} (ID: {c[0]})", c[0])
+
     def load_products(self):
         self.products_table.setRowCount(0)
         products = self.db.get_all_products()
         for row, prod in enumerate(products):
             self.products_table.insertRow(row)
             # prod: (id, serial_number, name, quantity, cost, price)
-            # Table columns: ID, Nombre, Número de Serie, Precio (LPS), Disponible, Cantidad
+            # Table columns: ID, Nombre, Número de Serie, Precio, Disponible, Cantidad
             self.products_table.setItem(row, 0, QTableWidgetItem(str(prod[0])))  # ID
             self.products_table.setItem(row, 1, QTableWidgetItem(prod[2]))       # Nombre
             self.products_table.setItem(row, 2, QTableWidgetItem(prod[1]))       # Número de Serie
-            self.products_table.setItem(row, 3, QTableWidgetItem(f"{prod[5]:.2f}"))  # Precio (LPS)
+            self.products_table.setItem(row, 3, QTableWidgetItem(self.currency_formatter.format_amount(prod[5])))  # Precio
             self.products_table.setItem(row, 4, QTableWidgetItem(str(prod[3])))  # Disponible
             spin = QSpinBox()
             spin.setRange(0, int(prod[3]))
             self.products_table.setCellWidget(row, 5, spin)
+
     def add_to_invoice(self):
         # Add selected products to invoice preview, now including serial number
         for row in range(self.products_table.rowCount()):
@@ -1032,7 +1032,7 @@ class GenerateInvoiceTab(QWidget):
                 prod_id = int(self.products_table.item(row, 0).text())
                 name = self.products_table.item(row, 1).text()
                 serial = self.products_table.item(row, 2).text()
-                price = float(self.products_table.item(row, 3).text())
+                price = self.currency_formatter.parse_amount(self.products_table.item(row, 3).text())
                 subtotal = qty * price
                 # Check if product already in selected_products
                 found = False
@@ -1048,12 +1048,9 @@ class GenerateInvoiceTab(QWidget):
                     self.selected_products.append((prod_id, name, serial, qty, price, subtotal))
                 spin.setValue(0)
         self.update_invoice_table()
+
     def update_invoice_table(self):
         # Update invoice preview table to include serial number
-        self.invoice_table.setColumnCount(6)
-        self.invoice_table.setHorizontalHeaderLabels([
-            "ID", "Nombre", "Número de Serie", "Cantidad", "Precio Unitario", "Subtotal"
-        ])
         self.invoice_table.setRowCount(len(self.selected_products))
         subtotal = 0
         for row, (prod_id, name, serial, qty, price, sub) in enumerate(self.selected_products):
@@ -1061,14 +1058,16 @@ class GenerateInvoiceTab(QWidget):
             self.invoice_table.setItem(row, 1, QTableWidgetItem(name))
             self.invoice_table.setItem(row, 2, QTableWidgetItem(serial))
             self.invoice_table.setItem(row, 3, QTableWidgetItem(str(qty)))
-            self.invoice_table.setItem(row, 4, QTableWidgetItem(f"LPS {price:.2f}"))
-            self.invoice_table.setItem(row, 5, QTableWidgetItem(f"LPS {sub:.2f}"))
+            self.invoice_table.setItem(row, 4, QTableWidgetItem(self.currency_formatter.format_amount(price)))
+            self.invoice_table.setItem(row, 5, QTableWidgetItem(self.currency_formatter.format_amount(sub)))
             subtotal += sub
-        tax = subtotal * 0.15
+        tax_rate = self.settings_manager.get_setting("tax_rate") / 100
+        tax = subtotal * tax_rate
         total = subtotal + tax
-        self.subtotal_label.setText(f"Subtotal: LPS {subtotal:.2f}")
-        self.tax_label.setText(f"ISV (15%): LPS {tax:.2f}")
-        self.total_label.setText(f"Total: LPS {total:.2f}")
+        self.subtotal_label.setText(f"Subtotal: {self.currency_formatter.format_amount(subtotal)}")
+        self.tax_label.setText(f"ISV ({self.settings_manager.get_setting('tax_rate')}%): {self.currency_formatter.format_amount(tax)}")
+        self.total_label.setText(f"Total: {self.currency_formatter.format_amount(total)}")
+
     def generate_invoice(self):
         import datetime, os
         if not self.selected_products:
@@ -1079,17 +1078,23 @@ class GenerateInvoiceTab(QWidget):
         client_name = self.client_combo.currentText().split(' (ID:')[0]
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         subtotal = sum(sub for *_, sub in self.selected_products)
-        tax = subtotal * 0.15
+        tax_rate = self.settings_manager.get_setting("tax_rate") / 100
+        tax = subtotal * tax_rate
         total = subtotal + tax
+        # Prepare items for DB
+        items = []
+        for prod_id, name, serial, qty, price, sub in self.selected_products:
+            items.append({'product_id': prod_id, 'quantity': qty})
         # Generate invoice text
-        # First, get a new invoice ID by checking the max ID in the DB
         import sqlite3
         with sqlite3.connect(self.db.db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT MAX(id) FROM invoices")
             row = cursor.fetchone()
             invoice_id = (row[0] or 0) + 1
-        filename = f"invoices/invoice_{invoice_id:05d}.txt"
+        invoice_folder = self.settings_manager.get_setting("invoice_folder")
+        os.makedirs(invoice_folder, exist_ok=True)
+        filename = f"{invoice_folder}/{self.settings_manager.get_setting('invoice_prefix')}_{invoice_id:05d}.txt"
         lines = [
             f"Factura N°: {invoice_id}",
             f"Fecha: {now}",
@@ -1099,20 +1104,32 @@ class GenerateInvoiceTab(QWidget):
             "-"*85
         ]
         for prod_id, name, serial, qty, price, sub in self.selected_products:
-            lines.append(f"{qty:<10}{name:<30}{serial:<15}LPS {price:<12.2f}LPS {sub:<12.2f}")
-        lines += [
-            "\n",
-            f"{'Subtotal:':<20}LPS {subtotal:.2f}",
-            f"{'ISV (15%):':<20}LPS {tax:.2f}",
-            f"{'Total:':<20}LPS {total:.2f}"
-        ]
+            lines.append(f"{qty:<10}{name:<30}{serial:<15}{self.currency_formatter.format_amount(price):<15}{self.currency_formatter.format_amount(sub):<15}")
+        lines.extend([
+            "-"*85,
+            f"Subtotal: {self.currency_formatter.format_amount(subtotal)}",
+            f"ISV ({self.settings_manager.get_setting('tax_rate')}%): {self.currency_formatter.format_amount(tax)}",
+            f"Total: {self.currency_formatter.format_amount(total)}"
+        ])
         with open(filename, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
-        # Now add invoice record with correct file path
-        self.db.add_invoice(client_id, client_name, now, subtotal, tax, total, filename)
-        self.feedback.setText(f"Factura generada: {filename}")
-        self.selected_products.clear()
-        self.update_invoice_table()
+        # Process invoice and update stock atomically
+        success, result = self.db.process_invoice_and_update_stock(
+            client_id, client_name, now, items, subtotal, tax, total, filename
+        )
+        if success:
+            self.selected_products = []
+            self.update_invoice_table()
+            self.feedback.setText(f"Factura generada exitosamente: {filename}")
+            self.load_products()  # Refresh inventory table
+        else:
+            self.feedback.setText(f"Error: {result}")
+
+    def load_clients(self):
+        self.client_combo.clear()
+        clients = self.db.get_all_clients()
+        for c in clients:
+            self.client_combo.addItem(f"{c[1]} (ID: {c[0]})", c[0])
 
 class ManageInvoicesTab(QWidget):
     def __init__(self):
@@ -1756,214 +1773,297 @@ class PurchaseHistoryTab(QWidget):
             painter.end()
 
 class SettingsTab(QWidget):
-    def __init__(self):
+    def __init__(self, settings_manager):
         super().__init__()
-        self.settings_manager = SettingsManager()
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-
-        # Create scroll area for settings
+        self.settings_manager = settings_manager
+        self.currency_formatter = CurrencyFormatter(settings_manager)
+        
+        layout = QVBoxLayout()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-        """)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
-        # Create container widget for settings
-        settings_container = QWidget()
-        settings_layout = QVBoxLayout(settings_container)
-        settings_layout.setSpacing(20)
-
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(20)
+        
         # Appearance Section
         appearance_group = self.create_group_box("Apariencia")
-        appearance_layout = QFormLayout()
+        appearance_layout = QVBoxLayout()
         
-        # Theme selector
+        # Theme
+        theme_layout = QHBoxLayout()
+        theme_layout.addWidget(QLabel("Tema:"))
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Claro", "Oscuro"])
         self.theme_combo.setCurrentText("Claro" if self.settings_manager.get_setting("theme") == "light" else "Oscuro")
         self.theme_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("theme", "light" if t == "Claro" else "dark"))
-        appearance_layout.addRow("Tema:", self.theme_combo)
+        theme_layout.addWidget(self.theme_combo)
+        appearance_layout.addLayout(theme_layout)
         
-        # Font size
+        # Font Size
+        font_layout = QHBoxLayout()
+        font_layout.addWidget(QLabel("Tamaño de Fuente:"))
         self.font_size_spin = QSpinBox()
-        self.font_size_spin.setRange(10, 20)
+        self.font_size_spin.setRange(8, 24)
         self.font_size_spin.setValue(self.settings_manager.get_setting("font_size"))
         self.font_size_spin.valueChanged.connect(lambda v: self.settings_manager.set_setting("font_size", v))
-        appearance_layout.addRow("Tamaño de fuente:", self.font_size_spin)
+        font_layout.addWidget(self.font_size_spin)
+        appearance_layout.addLayout(font_layout)
         
-        # Accent color
-        self.color_button = QPushButton()
-        self.color_button.setStyleSheet(f"background-color: {self.settings_manager.get_setting('accent_color')}; min-width: 100px;")
-        self.color_button.clicked.connect(self.choose_color)
-        appearance_layout.addRow("Color de acento:", self.color_button)
+        # Accent Color
+        color_layout = QHBoxLayout()
+        color_layout.addWidget(QLabel("Color de Acento:"))
+        self.color_btn = QPushButton()
+        self.color_btn.setFixedSize(50, 25)
+        self.color_btn.setStyleSheet(f"background-color: {self.settings_manager.get_setting('accent_color')};")
+        self.color_btn.clicked.connect(self.choose_color)
+        color_layout.addWidget(self.color_btn)
+        appearance_layout.addLayout(color_layout)
         
         appearance_group.setLayout(appearance_layout)
-        settings_layout.addWidget(appearance_group)
-
+        content_layout.addWidget(appearance_group)
+        
+        # Currency Section
+        currency_group = self.create_group_box("Configuración de Moneda")
+        currency_layout = QVBoxLayout()
+        
+        # Currency
+        currency_type_layout = QHBoxLayout()
+        currency_type_layout.addWidget(QLabel("Moneda:"))
+        self.currency_combo = QComboBox()
+        self.currency_combo.addItems(["LPS", "USD", "EUR"])
+        self.currency_combo.setCurrentText(self.settings_manager.get_setting("currency"))
+        self.currency_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("currency", t))
+        currency_type_layout.addWidget(self.currency_combo)
+        currency_layout.addLayout(currency_type_layout)
+        
+        # Currency Symbol
+        symbol_layout = QHBoxLayout()
+        symbol_layout.addWidget(QLabel("Símbolo:"))
+        self.symbol_input = QLineEdit()
+        self.symbol_input.setText(self.settings_manager.get_setting("currency_symbol"))
+        self.symbol_input.textChanged.connect(lambda t: self.settings_manager.set_setting("currency_symbol", t))
+        symbol_layout.addWidget(self.symbol_input)
+        currency_layout.addLayout(symbol_layout)
+        
+        # Currency Position
+        position_layout = QHBoxLayout()
+        position_layout.addWidget(QLabel("Posición del Símbolo:"))
+        self.position_combo = QComboBox()
+        self.position_combo.addItems(["Antes", "Después"])
+        self.position_combo.setCurrentText("Antes" if self.settings_manager.get_setting("currency_position") == "before" else "Después")
+        self.position_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("currency_position", "before" if t == "Antes" else "after"))
+        position_layout.addWidget(self.position_combo)
+        currency_layout.addLayout(position_layout)
+        
+        # Decimal Separator
+        decimal_layout = QHBoxLayout()
+        decimal_layout.addWidget(QLabel("Separador Decimal:"))
+        self.decimal_combo = QComboBox()
+        self.decimal_combo.addItems([".", ","])
+        self.decimal_combo.setCurrentText(self.settings_manager.get_setting("decimal_separator"))
+        self.decimal_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("decimal_separator", t))
+        decimal_layout.addWidget(self.decimal_combo)
+        currency_layout.addLayout(decimal_layout)
+        
+        # Thousands Separator
+        thousands_layout = QHBoxLayout()
+        thousands_layout.addWidget(QLabel("Separador de Miles:"))
+        self.thousands_combo = QComboBox()
+        self.thousands_combo.addItems([",", ".", " "])
+        self.thousands_combo.setCurrentText(self.settings_manager.get_setting("thousands_separator"))
+        self.thousands_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("thousands_separator", t))
+        thousands_layout.addWidget(self.thousands_combo)
+        currency_layout.addLayout(thousands_layout)
+        
+        currency_group.setLayout(currency_layout)
+        content_layout.addWidget(currency_group)
+        
         # Company Information Section
         company_group = self.create_group_box("Información de la Empresa")
-        company_layout = QFormLayout()
+        company_layout = QVBoxLayout()
         
-        # Company name
-        self.company_name = QLineEdit(self.settings_manager.get_setting("company_name"))
+        # Company Name
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Nombre:"))
+        self.company_name = QLineEdit()
+        self.company_name.setText(self.settings_manager.get_setting("company_name"))
         self.company_name.textChanged.connect(lambda t: self.settings_manager.set_setting("company_name", t))
-        company_layout.addRow("Nombre:", self.company_name)
+        name_layout.addWidget(self.company_name)
+        company_layout.addLayout(name_layout)
         
-        # Company address
-        self.company_address = QLineEdit(self.settings_manager.get_setting("company_address"))
+        # Company Address
+        address_layout = QHBoxLayout()
+        address_layout.addWidget(QLabel("Dirección:"))
+        self.company_address = QLineEdit()
+        self.company_address.setText(self.settings_manager.get_setting("company_address"))
         self.company_address.textChanged.connect(lambda t: self.settings_manager.set_setting("company_address", t))
-        company_layout.addRow("Dirección:", self.company_address)
+        address_layout.addWidget(self.company_address)
+        company_layout.addLayout(address_layout)
         
-        # Company phone
-        self.company_phone = QLineEdit(self.settings_manager.get_setting("company_phone"))
+        # Company Phone
+        phone_layout = QHBoxLayout()
+        phone_layout.addWidget(QLabel("Teléfono:"))
+        self.company_phone = QLineEdit()
+        self.company_phone.setText(self.settings_manager.get_setting("company_phone"))
         self.company_phone.textChanged.connect(lambda t: self.settings_manager.set_setting("company_phone", t))
-        company_layout.addRow("Teléfono:", self.company_phone)
+        phone_layout.addWidget(self.company_phone)
+        company_layout.addLayout(phone_layout)
         
-        # Company email
-        self.company_email = QLineEdit(self.settings_manager.get_setting("company_email"))
+        # Company Email
+        email_layout = QHBoxLayout()
+        email_layout.addWidget(QLabel("Email:"))
+        self.company_email = QLineEdit()
+        self.company_email.setText(self.settings_manager.get_setting("company_email"))
         self.company_email.textChanged.connect(lambda t: self.settings_manager.set_setting("company_email", t))
-        company_layout.addRow("Email:", self.company_email)
+        email_layout.addWidget(self.company_email)
+        company_layout.addLayout(email_layout)
         
         # Company RTN
-        self.company_rtn = QLineEdit(self.settings_manager.get_setting("company_rtn"))
+        rtn_layout = QHBoxLayout()
+        rtn_layout.addWidget(QLabel("RTN:"))
+        self.company_rtn = QLineEdit()
+        self.company_rtn.setText(self.settings_manager.get_setting("company_rtn"))
         self.company_rtn.textChanged.connect(lambda t: self.settings_manager.set_setting("company_rtn", t))
-        company_layout.addRow("RTN:", self.company_rtn)
+        rtn_layout.addWidget(self.company_rtn)
+        company_layout.addLayout(rtn_layout)
         
         company_group.setLayout(company_layout)
-        settings_layout.addWidget(company_group)
-
+        content_layout.addWidget(company_group)
+        
         # Invoice Settings Section
         invoice_group = self.create_group_box("Configuración de Facturas")
-        invoice_layout = QFormLayout()
+        invoice_layout = QVBoxLayout()
         
-        # Tax rate
+        # Tax Rate
+        tax_layout = QHBoxLayout()
+        tax_layout.addWidget(QLabel("Tasa de Impuesto (%):"))
         self.tax_rate = QDoubleSpinBox()
         self.tax_rate.setRange(0, 100)
         self.tax_rate.setValue(self.settings_manager.get_setting("tax_rate"))
         self.tax_rate.valueChanged.connect(lambda v: self.settings_manager.set_setting("tax_rate", v))
-        invoice_layout.addRow("Tasa de impuesto (%):", self.tax_rate)
+        tax_layout.addWidget(self.tax_rate)
+        invoice_layout.addLayout(tax_layout)
         
-        # Invoice prefix
-        self.invoice_prefix = QLineEdit(self.settings_manager.get_setting("invoice_prefix"))
+        # Invoice Prefix
+        prefix_layout = QHBoxLayout()
+        prefix_layout.addWidget(QLabel("Prefijo de Factura:"))
+        self.invoice_prefix = QLineEdit()
+        self.invoice_prefix.setText(self.settings_manager.get_setting("invoice_prefix"))
         self.invoice_prefix.textChanged.connect(lambda t: self.settings_manager.set_setting("invoice_prefix", t))
-        invoice_layout.addRow("Prefijo de factura:", self.invoice_prefix)
+        prefix_layout.addWidget(self.invoice_prefix)
+        invoice_layout.addLayout(prefix_layout)
         
         invoice_group.setLayout(invoice_layout)
-        settings_layout.addWidget(invoice_group)
-
-        # Database Settings Section
-        database_group = self.create_group_box("Configuración de Base de Datos")
-        database_layout = QFormLayout()
+        content_layout.addWidget(invoice_group)
         
-        # Backup enabled
-        self.backup_enabled = QCheckBox()
+        # Database Settings Section
+        db_group = self.create_group_box("Configuración de Base de Datos")
+        db_layout = QVBoxLayout()
+        
+        # Backup Enabled
+        backup_layout = QHBoxLayout()
+        self.backup_enabled = QCheckBox("Habilitar Copias de Seguridad")
         self.backup_enabled.setChecked(self.settings_manager.get_setting("backup_enabled"))
         self.backup_enabled.stateChanged.connect(lambda s: self.settings_manager.set_setting("backup_enabled", bool(s)))
-        database_layout.addRow("Habilitar respaldo automático:", self.backup_enabled)
+        backup_layout.addWidget(self.backup_enabled)
+        db_layout.addLayout(backup_layout)
         
-        # Backup interval
+        # Backup Interval
+        interval_layout = QHBoxLayout()
+        interval_layout.addWidget(QLabel("Intervalo de Copia (días):"))
         self.backup_interval = QSpinBox()
         self.backup_interval.setRange(1, 30)
         self.backup_interval.setValue(self.settings_manager.get_setting("backup_interval_days"))
         self.backup_interval.valueChanged.connect(lambda v: self.settings_manager.set_setting("backup_interval_days", v))
-        database_layout.addRow("Intervalo de respaldo (días):", self.backup_interval)
+        interval_layout.addWidget(self.backup_interval)
+        db_layout.addLayout(interval_layout)
         
-        # Backup folder
-        self.backup_folder = QLineEdit(self.settings_manager.get_setting("backup_folder"))
-        self.backup_folder.textChanged.connect(lambda t: self.settings_manager.set_setting("backup_folder", t))
-        database_layout.addRow("Carpeta de respaldo:", self.backup_folder)
+        db_group.setLayout(db_layout)
+        content_layout.addWidget(db_group)
         
-        database_group.setLayout(database_layout)
-        settings_layout.addWidget(database_group)
-
         # Default Values Section
-        defaults_group = self.create_group_box("Valores Predeterminados")
-        defaults_layout = QFormLayout()
+        defaults_group = self.create_group_box("Valores por Defecto")
+        defaults_layout = QVBoxLayout()
         
-        # Default product quantity
-        self.default_quantity = QSpinBox()
-        self.default_quantity.setRange(1, 1000)
-        self.default_quantity.setValue(self.settings_manager.get_setting("default_product_quantity"))
-        self.default_quantity.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_quantity", v))
-        defaults_layout.addRow("Cantidad predeterminada:", self.default_quantity)
+        # Default Product Quantity
+        qty_layout = QHBoxLayout()
+        qty_layout.addWidget(QLabel("Cantidad por Defecto:"))
+        self.default_qty = QSpinBox()
+        self.default_qty.setRange(1, 1000)
+        self.default_qty.setValue(self.settings_manager.get_setting("default_product_quantity"))
+        self.default_qty.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_quantity", v))
+        qty_layout.addWidget(self.default_qty)
+        defaults_layout.addLayout(qty_layout)
         
-        # Default product cost
+        # Default Product Cost
+        cost_layout = QHBoxLayout()
+        cost_layout.addWidget(QLabel("Costo por Defecto:"))
         self.default_cost = QDoubleSpinBox()
         self.default_cost.setRange(0, 1000000)
         self.default_cost.setValue(self.settings_manager.get_setting("default_product_cost"))
         self.default_cost.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_cost", v))
-        defaults_layout.addRow("Costo predeterminado:", self.default_cost)
+        cost_layout.addWidget(self.default_cost)
+        defaults_layout.addLayout(cost_layout)
         
-        # Default product price
+        # Default Product Price
+        price_layout = QHBoxLayout()
+        price_layout.addWidget(QLabel("Precio por Defecto:"))
         self.default_price = QDoubleSpinBox()
         self.default_price.setRange(0, 1000000)
         self.default_price.setValue(self.settings_manager.get_setting("default_product_price"))
         self.default_price.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_price", v))
-        defaults_layout.addRow("Precio predeterminado:", self.default_price)
+        price_layout.addWidget(self.default_price)
+        defaults_layout.addLayout(price_layout)
         
         defaults_group.setLayout(defaults_layout)
-        settings_layout.addWidget(defaults_group)
-
-        # Language Section
-        language_group = self.create_group_box("Idioma")
-        language_layout = QFormLayout()
+        content_layout.addWidget(defaults_group)
         
-        # Language selector
-        self.language_combo = QComboBox()
-        self.language_combo.addItems(["Español", "English"])
-        self.language_combo.setCurrentText("Español" if self.settings_manager.get_setting("language") == "es" else "English")
-        self.language_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("language", "es" if t == "Español" else "en"))
-        language_layout.addRow("Idioma:", self.language_combo)
+        # Language Section (HIDDEN)
+        # language_group = self.create_group_box("Idioma")
+        # language_layout = QVBoxLayout()
+        # self.language_combo = QComboBox()
+        # self.language_combo.addItems(["Español", "English"])
+        # self.language_combo.setCurrentText("Español" if self.settings_manager.get_setting("language") == "es" else "English")
+        # self.language_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("language", "es" if t == "Español" else "en"))
+        # language_layout.addWidget(self.language_combo)
+        # language_group.setLayout(language_layout)
+        # content_layout.addWidget(language_group)
         
-        language_group.setLayout(language_layout)
-        settings_layout.addWidget(language_group)
-
         # Auto-save Section
         autosave_group = self.create_group_box("Auto-guardado")
-        autosave_layout = QFormLayout()
+        autosave_layout = QVBoxLayout()
         
-        # Auto-save enabled
-        self.autosave_enabled = QCheckBox()
+        # Auto-save Enabled
+        autosave_enabled_layout = QHBoxLayout()
+        self.autosave_enabled = QCheckBox("Habilitar Auto-guardado")
         self.autosave_enabled.setChecked(self.settings_manager.get_setting("auto_save_enabled"))
         self.autosave_enabled.stateChanged.connect(lambda s: self.settings_manager.set_setting("auto_save_enabled", bool(s)))
-        autosave_layout.addRow("Habilitar auto-guardado:", self.autosave_enabled)
+        autosave_enabled_layout.addWidget(self.autosave_enabled)
+        autosave_layout.addLayout(autosave_enabled_layout)
         
-        # Auto-save interval
+        # Auto-save Interval
+        autosave_interval_layout = QHBoxLayout()
+        autosave_interval_layout.addWidget(QLabel("Intervalo (minutos):"))
         self.autosave_interval = QSpinBox()
         self.autosave_interval.setRange(1, 60)
         self.autosave_interval.setValue(self.settings_manager.get_setting("auto_save_interval_minutes"))
         self.autosave_interval.valueChanged.connect(lambda v: self.settings_manager.set_setting("auto_save_interval_minutes", v))
-        autosave_layout.addRow("Intervalo de auto-guardado (minutos):", self.autosave_interval)
+        autosave_interval_layout.addWidget(self.autosave_interval)
+        autosave_layout.addLayout(autosave_interval_layout)
         
         autosave_group.setLayout(autosave_layout)
-        settings_layout.addWidget(autosave_group)
-
-        # Reset button
-        reset_btn = QPushButton("Restaurar valores predeterminados")
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                padding: 10px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
+        content_layout.addWidget(autosave_group)
+        
+        # Reset Button
+        reset_btn = QPushButton("Restaurar Valores por Defecto")
         reset_btn.clicked.connect(self.reset_settings)
-        settings_layout.addWidget(reset_btn)
-
-        # Add stretch to push everything to the top
-        settings_layout.addStretch()
-
-        # Set the scroll area's widget
-        scroll.setWidget(settings_container)
+        content_layout.addWidget(reset_btn)
+        
+        scroll.setWidget(content)
         layout.addWidget(scroll)
+        self.setLayout(layout)
 
     def create_group_box(self, title):
         """Create a styled group box for settings sections."""
@@ -1989,7 +2089,7 @@ class SettingsTab(QWidget):
         color = QColorDialog.getColor(QColor(self.settings_manager.get_setting("accent_color")))
         if color.isValid():
             self.settings_manager.set_setting("accent_color", color.name())
-            self.color_button.setStyleSheet(f"background-color: {color.name()}; min-width: 100px;")
+            self.color_btn.setStyleSheet(f"background-color: {color.name()};")
 
     def reset_settings(self):
         """Reset all settings to default values."""
@@ -2006,7 +2106,7 @@ class SettingsTab(QWidget):
             # Refresh all UI elements with new values
             self.theme_combo.setCurrentText("Claro" if self.settings_manager.get_setting("theme") == "light" else "Oscuro")
             self.font_size_spin.setValue(self.settings_manager.get_setting("font_size"))
-            self.color_button.setStyleSheet(f"background-color: {self.settings_manager.get_setting('accent_color')}; min-width: 100px;")
+            self.color_btn.setStyleSheet(f"background-color: {self.settings_manager.get_setting('accent_color')};")
             self.company_name.setText(self.settings_manager.get_setting("company_name"))
             self.company_address.setText(self.settings_manager.get_setting("company_address"))
             self.company_phone.setText(self.settings_manager.get_setting("company_phone"))
@@ -2016,280 +2116,262 @@ class SettingsTab(QWidget):
             self.invoice_prefix.setText(self.settings_manager.get_setting("invoice_prefix"))
             self.backup_enabled.setChecked(self.settings_manager.get_setting("backup_enabled"))
             self.backup_interval.setValue(self.settings_manager.get_setting("backup_interval_days"))
-            self.backup_folder.setText(self.settings_manager.get_setting("backup_folder"))
-            self.default_quantity.setValue(self.settings_manager.get_setting("default_product_quantity"))
+            self.currency_combo.setCurrentText(self.settings_manager.get_setting("currency"))
+            self.symbol_input.setText(self.settings_manager.get_setting("currency_symbol"))
+            self.position_combo.setCurrentText(self.settings_manager.get_setting("currency_position"))
+            self.decimal_combo.setCurrentText(self.settings_manager.get_setting("decimal_separator"))
+            self.thousands_combo.setCurrentText(self.settings_manager.get_setting("thousands_separator"))
+            self.default_qty.setValue(self.settings_manager.get_setting("default_product_quantity"))
             self.default_cost.setValue(self.settings_manager.get_setting("default_product_cost"))
             self.default_price.setValue(self.settings_manager.get_setting("default_product_price"))
-            self.language_combo.setCurrentText("Español" if self.settings_manager.get_setting("language") == "es" else "English")
+            # self.language_combo.setCurrentText("Español" if self.settings_manager.get_setting("language") == "es" else "English")
             self.autosave_enabled.setChecked(self.settings_manager.get_setting("auto_save_enabled"))
             self.autosave_interval.setValue(self.settings_manager.get_setting("auto_save_interval_minutes"))
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Sistema de Gestión")
-        self.setMinimumSize(1200, 800)
-        
-        # Initialize managers
         self.settings_manager = SettingsManager()
         self.backup_manager = BackupManager(self.settings_manager)
-        
-        # Connect backup signals
         self.backup_manager.backup_completed.connect(self.show_backup_message)
         self.backup_manager.backup_failed.connect(self.show_backup_error)
-        
-        # Start backup timer
         self.backup_manager.start_backup_timer()
         
-        # Apply initial theme
-        self.apply_theme()
+        self.setWindowTitle("Sistema de Inventario")
+        self.setMinimumSize(1200, 800)
         
         # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setSpacing(0)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        layout = QHBoxLayout(central_widget)
         
         # Create left menu
-        menu_widget = QWidget()
-        menu_widget.setFixedWidth(200)
-        menu_widget.setStyleSheet("""
-            QWidget {
-                background-color: #2c3e50;
-                color: white;
-            }
-            QPushButton {
-                text-align: left;
-                padding: 15px;
-                border: none;
-                color: white;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #34495e;
-            }
-            QPushButton:checked {
-                background-color: #3498db;
-            }
-        """)
-        menu_layout = QVBoxLayout(menu_widget)
-        menu_layout.setSpacing(0)
-        menu_layout.setContentsMargins(0, 0, 0, 0)
+        menu = QWidget()
+        menu.setFixedWidth(200)
+        menu_layout = QVBoxLayout(menu)
+        menu_layout.setSpacing(10)
         
         # Add menu buttons
-        self.menu_buttons = {}
-        menu_items = [
-            "Inventario", "Añadir producto", "Actualizar producto",
-            "Clientes", "Añadir cliente", "Actualizar cliente",
-            "Generar Factura", "Administrar Facturas", "Reportes de Ventas", "Historial de Compras"
+        buttons = [
+            ("Inicio", "home"),
+            ("Inventario", "box"),
+            ("Agregar Producto", "plus"),
+            ("Actualizar Producto", "edit"),
+            ("Clientes", "users"),
+            ("Agregar Cliente", "user-plus"),
+            ("Actualizar Cliente", "user-edit"),
+            ("Generar Factura", "file-text"),
+            ("Administrar Facturas", "file"),
+            ("Reportes de Ventas", "bar-chart"),
+            ("Historial de Compras", "history")
         ]
         
-        for item in menu_items:
-            btn = QPushButton(item)
-            btn.setCheckable(True)
-            btn.clicked.connect(lambda checked, text=item: self.open_tab(text))
-            self.menu_buttons[item] = btn
+        for text, icon in buttons:
+            btn = QPushButton(text)
+            btn.setIcon(QIcon(f"icons/{icon}.png"))
+            btn.clicked.connect(lambda checked, t=text: self.open_tab(t))
             menu_layout.addWidget(btn)
         
+        # Add settings button at the bottom
+        settings_btn = QPushButton("Configuración")
+        settings_btn.setIcon(QIcon("icons/settings.png"))
+        settings_btn.clicked.connect(lambda: self.open_tab("Settings"))
         menu_layout.addStretch()
+        menu_layout.addWidget(settings_btn)
         
-        # Create tab widget for content
+        # Add menu to main layout
+        layout.addWidget(menu)
+        
+        # Create tab widget
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
-        self.tab_widget.setStyleSheet("""
-            QTabWidget::pane {
-                border: none;
-            }
-            QTabBar::tab {
-                background-color: #34495e;
-                color: white;
-                padding: 8px 20px;
-                margin-right: 2px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background-color: #3498db;
-                color: white;
-            }
-            QTabBar::close-button {
-                image: url("icons/close.png");
-                background: #34495e;
-                border-radius: 8px;
-                padding: 2px;
-            }
-            QTabBar::close-button:hover {
-                background: #e74c3c;
-            }
-        """)
+        layout.addWidget(self.tab_widget)
         
-        # Add widgets to main layout
-        main_layout.addWidget(menu_widget)
-        main_layout.addWidget(self.tab_widget)
+        # Apply initial theme
+        self.apply_theme()
         
-        # Add welcome tab
-        welcome_tab = WelcomeTab()
-        self.tab_widget.addTab(welcome_tab, "Inicio")
-        self.tab_widget.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)  # Remove close button from welcome tab
-        
-        # Settings button at the bottom
-        self.settings_btn = QPushButton()
-        self.settings_btn.setText("  Settings")
-        self.settings_btn.setIcon(QIcon('icons/settings.png'))
-        self.settings_btn.setIconSize(QPixmap('icons/settings.png').size())
-        self.settings_btn.setCheckable(True)
-        self.settings_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2c3e50;
-                color: white;
-                font-size: 15px;
-                padding: 15px;
-                border: none;
-                text-align: left;
-            }
-            QPushButton:hover {
-                background-color: #34495e;
-            }
-            QPushButton:checked {
-                background-color: #3498db;
-            }
-        """)
-        self.settings_btn.clicked.connect(lambda: self.open_tab("Settings"))
-        menu_layout.addWidget(self.settings_btn)
-
         # Connect settings changed signal
         self.settings_manager.settings_changed.connect(self.on_settings_changed)
 
     def apply_theme(self):
-        """Apply the current theme settings."""
         theme = self.settings_manager.get_setting("theme")
         font_size = self.settings_manager.get_setting("font_size")
         accent_color = self.settings_manager.get_setting("accent_color")
         
-        # Base stylesheet
         if theme == "dark":
-            base_style = """
-                QWidget {
+            self.setStyleSheet(f"""
+                QMainWindow, QWidget {{
                     background-color: #2c3e50;
+                    color: #ecf0f1;
+                }}
+                QPushButton {{
+                    background-color: {accent_color};
                     color: white;
-                }
-                QTableWidget {
+                    border: none;
+                    padding: 10px;
+                    border-radius: 5px;
+                    text-align: left;
+                    font-size: {font_size}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {self.adjust_color(accent_color, -20)};
+                }}
+                QTabWidget::pane {{
+                    border: none;
+                }}
+                QTabBar::tab {{
                     background-color: #34495e;
-                    color: white;
-                    gridline-color: #2c3e50;
-                }
-                QTableWidget::item {
-                    color: white;
-                }
-                QTableWidget::item:selected {
-                    background-color: #3498db;
-                }
-                QHeaderView::section {
-                    background-color: #2c3e50;
-                    color: white;
-                }
-                QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+                    color: #ecf0f1;
+                    padding: 8px 20px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                    font-size: {font_size}px;
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {accent_color};
+                }}
+                QTabBar::close-button {{
+                    image: url(icons/close.png);
+                    subcontrol-position: right;
+                }}
+                QTableWidget {{
                     background-color: #34495e;
+                    alternate-background-color: #2c3e50;
+                    color: #ecf0f1;
+                    gridline-color: #7f8c8d;
+                    font-size: {font_size}px;
+                }}
+                QHeaderView::section {{
+                    background-color: {accent_color};
                     color: white;
-                    border: 1px solid #2c3e50;
-                }
-                QPushButton {
-                    background-color: #3498db;
-                    color: white;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-            """
+                    padding: 5px;
+                    border: none;
+                }}
+                QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
+                    background-color: #34495e;
+                    color: #ecf0f1;
+                    border: 1px solid #7f8c8d;
+                    padding: 5px;
+                    border-radius: 3px;
+                    font-size: {font_size}px;
+                }}
+                QLabel {{
+                    font-size: {font_size}px;
+                }}
+            """)
         else:
-            base_style = """
-                QWidget {
-                    background-color: white;
+            self.setStyleSheet(f"""
+                QMainWindow, QWidget {{
+                    background-color: #f5f6fa;
                     color: #2c3e50;
-                }
-                QTableWidget {
-                    background-color: white;
-                    color: #2c3e50;
-                    gridline-color: #bdc3c7;
-                }
-                QTableWidget::item {
-                    color: #2c3e50;
-                }
-                QTableWidget::item:selected {
-                    background-color: #d0e7fa;
-                }
-                QHeaderView::section {
-                    background-color: #e0e4ea;
-                    color: #2c3e50;
-                }
-                QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-                    background-color: white;
-                    color: #2c3e50;
-                    border: 1px solid #bdc3c7;
-                }
-                QPushButton {
-                    background-color: #3498db;
+                }}
+                QPushButton {{
+                    background-color: {accent_color};
                     color: white;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-            """
+                    border: none;
+                    padding: 10px;
+                    border-radius: 5px;
+                    text-align: left;
+                    font-size: {font_size}px;
+                }}
+                QPushButton:hover {{
+                    background-color: {self.adjust_color(accent_color, -20)};
+                }}
+                QTabWidget::pane {{
+                    border: none;
+                }}
+                QTabBar::tab {{
+                    background-color: #dcdde1;
+                    color: #2c3e50;
+                    padding: 8px 20px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                    font-size: {font_size}px;
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {accent_color};
+                    color: white;
+                }}
+                QTabBar::close-button {{
+                    image: url(icons/close.png);
+                    subcontrol-position: right;
+                }}
+                QTableWidget {{
+                    background-color: white;
+                    alternate-background-color: #f5f6fa;
+                    color: #2c3e50;
+                    gridline-color: #dcdde1;
+                    font-size: {font_size}px;
+                }}
+                QHeaderView::section {{
+                    background-color: {accent_color};
+                    color: white;
+                    padding: 5px;
+                    border: none;
+                }}
+                QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
+                    background-color: white;
+                    color: #2c3e50;
+                    border: 1px solid #dcdde1;
+                    padding: 5px;
+                    border-radius: 3px;
+                    font-size: {font_size}px;
+                }}
+                QLabel {{
+                    font-size: {font_size}px;
+                }}
+            """)
+
+    def adjust_color(self, color, amount):
+        """Adjust a hex color by the given amount."""
+        # Convert hex to RGB
+        r = int(color[1:3], 16)
+        g = int(color[3:5], 16)
+        b = int(color[5:7], 16)
         
-        # Apply font size
-        base_style += f"""
-            QWidget {{
-                font-size: {font_size}px;
-            }}
-        """
+        # Adjust each component
+        r = max(0, min(255, r + amount))
+        g = max(0, min(255, g + amount))
+        b = max(0, min(255, b + amount))
         
-        # Apply accent color
-        base_style += f"""
-            QPushButton:checked {{
-                background-color: {accent_color};
-            }}
-        """
-        
-        self.setStyleSheet(base_style)
+        # Convert back to hex
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def on_settings_changed(self):
-        """Handle settings changes."""
         self.apply_theme()
         self.backup_manager.start_backup_timer()
 
     def show_backup_message(self, message):
-        """Show backup completion message."""
         QMessageBox.information(self, "Backup", message)
 
     def show_backup_error(self, error):
-        """Show backup error message."""
-        QMessageBox.critical(self, "Backup Error", error)
+        QMessageBox.critical(self, "Error de Backup", error)
 
     def open_tab(self, title):
-        """Open a new tab or switch to existing one."""
         # Check if tab already exists
         for i in range(self.tab_widget.count()):
             if self.tab_widget.tabText(i) == title:
                 self.tab_widget.setCurrentIndex(i)
                 return
         
-        # Create new tab based on title
-        if title == "Inventario":
+        # Create new tab
+        if title == "Inicio":
+            new_tab = WelcomeTab()
+        elif title == "Inventario":
             new_tab = InventoryTab()
-        elif title == "Añadir producto":
+        elif title == "Agregar Producto":
             new_tab = AddProductTab()
-        elif title == "Actualizar producto":
+        elif title == "Actualizar Producto":
             new_tab = UpdateProductTab()
         elif title == "Clientes":
             new_tab = ClientsTab()
-        elif title == "Añadir cliente":
+        elif title == "Agregar Cliente":
             new_tab = AddClientTab()
-        elif title == "Actualizar cliente":
+        elif title == "Actualizar Cliente":
             new_tab = UpdateClientTab()
         elif title == "Generar Factura":
-            new_tab = GenerateInvoiceTab()
+            new_tab = GenerateInvoiceTab(self.settings_manager)
         elif title == "Administrar Facturas":
             new_tab = ManageInvoicesTab()
         elif title == "Reportes de Ventas":
@@ -2297,23 +2379,16 @@ class MainWindow(QMainWindow):
         elif title == "Historial de Compras":
             new_tab = PurchaseHistoryTab()
         elif title == "Settings":
-            new_tab = SettingsTab()
+            new_tab = SettingsTab(self.settings_manager)
         else:
             new_tab = QWidget()
-            layout = QVBoxLayout(new_tab)
-            layout.addWidget(QLabel(f"Contenido de {title}"))
         
         # Add tab
         index = self.tab_widget.addTab(new_tab, title)
         self.tab_widget.setCurrentIndex(index)
-        
-        # Update menu button states
-        for btn in self.menu_buttons.values():
-            btn.setChecked(btn.text() == title)
 
     def close_tab(self, index):
-        """Close the tab at the specified index."""
-        if self.tab_widget.count() > 1 and index != 0:  # Don't close welcome tab
+        if self.tab_widget.tabText(index) != "Inicio":
             self.tab_widget.removeTab(index)
             # If closing the current tab, switch to welcome tab
             if index == self.tab_widget.currentIndex():

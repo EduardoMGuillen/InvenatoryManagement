@@ -68,11 +68,13 @@ _Administrar Facturas: Search, view, print, and delete invoices_
 
 ## Invoice Management
 
-- **Administrar Facturas Tab**: View, search, print, and delete invoices by client name or invoice ID.
-- **Print Invoices**: Print any invoice directly from the app.
-- **Delete Invoices**: Remove invoices from the database and delete their .txt files.
+- **Administrar Facturas Tab**: View, search, print, and delete invoices by client name or invoice ID in a modern, user-friendly interface.
+- **Professional Invoice Printing**: Print invoices with a beautiful, professional HTML template—fully compatible with PyQt6 and all platforms.
+- **Single-Click Actions**: Select an invoice and use the "Ver", "Imprimir", or "Eliminar" buttons for a streamlined workflow.
+- **Invoice Preview**: Instantly preview the selected invoice in a styled canvas before printing or deleting.
+- **Delete Invoices**: Remove invoices from the database and delete their .txt files with confirmation.
 - **Search**: Quickly find invoices by client name or invoice ID.
-- **No More Ventas Tab**: All invoice management is now centralized in "Administrar Facturas" for simplicity.
+- **Centralized Management**: All invoice management is now in "Administrar Facturas" for simplicity and reliability.
 
 ## Client Management
 
