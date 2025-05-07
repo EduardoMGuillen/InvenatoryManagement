@@ -62,7 +62,8 @@ _Update client information easily_
 
 ### Invoice Management Tab
 
-![Invoice Management Tab](screenshots/manage_invoices.png)
+<!-- Add screenshot here later -->
+
 _Administrar Facturas: Search, view, print, and delete invoices_
 
 ## Invoice Management
