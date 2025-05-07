@@ -324,4 +324,20 @@ class Database:
                 conn.commit()
                 return True
         except sqlite3.Error:
-            return False 
+            return False
+
+    def get_invoices_by_date_range(self, start, end):
+        """Get all invoices between start and end date (inclusive)."""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM invoices WHERE date(date) >= date(?) AND date(date) <= date(?) ORDER BY date ASC
+            """, (start, end))
+            return cursor.fetchall()
+
+    def get_invoices_by_client(self, client_id):
+        """Get all invoices for a specific client."""
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM invoices WHERE client_id = ? ORDER BY date ASC", (client_id,))
+            return cursor.fetchall() 

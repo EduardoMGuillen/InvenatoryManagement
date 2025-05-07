@@ -3,9 +3,9 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QTabWidget, QLabel, QTabBar,
                             QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
                             QHeaderView, QMessageBox, QFormLayout, QSpinBox, QDoubleSpinBox, 
-                            QStyledItemDelegate, QDialog)
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QIcon, QTextDocument, QPainter
+                            QStyledItemDelegate, QDialog, QDateEdit)
+from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtGui import QFont, QIcon, QTextDocument, QPainter, QPixmap
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from login import LoginWindow
 from database import Database
@@ -1442,6 +1442,338 @@ class ManageInvoicesTab(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error al eliminar la factura: {str(e)}")
 
+class SalesReportTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        # --- Filters ---
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Fecha inicio:"))
+        self.start_date = QDateEdit()
+        self.start_date.setCalendarPopup(True)
+        self.start_date.setDate(QDate.currentDate().addMonths(-1))
+        filter_layout.addWidget(self.start_date)
+        filter_layout.addWidget(QLabel("Fecha fin:"))
+        self.end_date = QDateEdit()
+        self.end_date.setCalendarPopup(True)
+        self.end_date.setDate(QDate.currentDate())
+        filter_layout.addWidget(self.end_date)
+        self.generate_btn = QPushButton("Generar Reporte")
+        self.generate_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #1c5d99;
+            }
+        """)
+        self.generate_btn.clicked.connect(self.generate_report)
+        self.print_btn = QPushButton("Imprimir Reporte")
+        self.print_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #217dbb;
+            }
+        """)
+        self.print_btn.clicked.connect(self.print_report)
+        filter_layout.addWidget(self.generate_btn)
+        filter_layout.addWidget(self.print_btn)
+        filter_layout.addStretch()
+        layout.addLayout(filter_layout)
+        # --- Results table ---
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels([
+            "ID Factura", "Cliente", "Fecha", "Subtotal", "ISV", "Total"
+        ])
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+        layout.addWidget(self.table)
+        # --- Summary ---
+        self.summary_label = QLabel("")
+        self.summary_label.setStyleSheet("font-size: 15px; color: #fff; padding: 10px;")
+        layout.addWidget(self.summary_label)
+        self.setLayout(layout)
+        self.current_report = []
+        self.current_total = 0
+    def generate_report(self):
+        start = self.start_date.date().toString("yyyy-MM-dd")
+        end = self.end_date.date().toString("yyyy-MM-dd")
+        invoices = self.db.get_invoices_by_date_range(start, end)
+        self.current_report = invoices
+        self.table.setRowCount(len(invoices))
+        total_sales = 0
+        for row, inv in enumerate(invoices):
+            for col, value in enumerate(inv[:6]):
+                item = QTableWidgetItem()
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.DisplayRole, int(value))
+                elif col == 2:
+                    item.setText(str(value))
+                elif col in [3, 4, 5]:
+                    try:
+                        float_value = float(value)
+                        item.setData(Qt.ItemDataRole.DisplayRole, float_value)
+                        item.setText(f"LPS {float_value:,.2f}")
+                        if col == 5:
+                            total_sales += float_value
+                    except (ValueError, TypeError):
+                        item.setText(str(value))
+                else:
+                    item.setText(str(value))
+                self.table.setItem(row, col, item)
+        self.current_total = total_sales
+        self.summary_label.setText(f"Total de facturas: {len(invoices)} | Ventas totales: LPS {total_sales:,.2f}")
+    def print_report(self):
+        from PyQt6.QtGui import QTextDocument, QPainter
+        from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
+        start = self.start_date.date().toString("yyyy-MM-dd")
+        end = self.end_date.date().toString("yyyy-MM-dd")
+        invoices = self.current_report
+        total_sales = self.current_total
+        html = f'''
+        <html>
+        <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; color: #222; }}
+            .header {{ font-size: 22px; font-weight: bold; margin-bottom: 10px; }}
+            .meta {{ margin-bottom: 10px; }}
+            .meta span {{ margin-right: 30px; }}
+            table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+            th, td {{ border: 1px solid #ccc; padding: 6px 10px; text-align: left; }}
+            th {{ background: #f0f0f0; }}
+            .totals td {{ border: none; font-size: 16px; }}
+            .totals tr td:first-child {{ text-align: right; }}
+        </style>
+        </head>
+        <body>
+            <div class="header">Reporte de Ventas</div>
+            <div class="meta">
+                <span><b>Del:</b> {start}</span>
+                <span><b>Al:</b> {end}</span>
+            </div>
+            <table>
+                <tr><th>ID Factura</th><th>Cliente</th><th>Fecha</th><th>Subtotal</th><th>ISV</th><th>Total</th></tr>
+        '''
+        for inv in invoices:
+            html += f'<tr>'
+            html += f'<td>{inv[0]}</td>'
+            html += f'<td>{inv[2]}</td>'
+            html += f'<td>{inv[3]}</td>'
+            html += f'<td>LPS {float(inv[4]):,.2f}</td>'
+            html += f'<td>LPS {float(inv[5]):,.2f}</td>'
+            html += f'<td>LPS {float(inv[6]):,.2f}</td>'
+            html += f'</tr>'
+        html += f'''
+            </table>
+            <table class="totals">
+                <tr><td><b>Total de facturas:</b></td><td>{len(invoices)}</td></tr>
+                <tr><td><b>Ventas totales:</b></td><td>LPS {total_sales:,.2f}</td></tr>
+            </table>
+        </body>
+        </html>
+        '''
+        doc = QTextDocument()
+        doc.setHtml(html)
+        printer = QPrinter()
+        dialog = QPrintDialog(printer)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            painter = QPainter(printer)
+            doc.drawContents(painter)
+            painter.end()
+
+class PurchaseHistoryTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        # --- Client selector ---
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Cliente:"))
+        self.client_combo = QComboBox()
+        self.load_clients()
+        filter_layout.addWidget(self.client_combo)
+        self.generate_btn = QPushButton("Ver Historial")
+        self.generate_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2980b9;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #1c5d99;
+            }
+        """)
+        self.generate_btn.clicked.connect(self.generate_history)
+        filter_layout.addWidget(self.generate_btn)
+        self.print_btn = QPushButton("Imprimir Historial")
+        self.print_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 6px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #217dbb;
+            }
+        """)
+        self.print_btn.clicked.connect(self.print_history)
+        filter_layout.addWidget(self.print_btn)
+        filter_layout.addStretch()
+        layout.addLayout(filter_layout)
+        # --- Results table ---
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels([
+            "ID Factura", "Cliente", "Fecha", "Subtotal", "ISV", "Total"
+        ])
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+        layout.addWidget(self.table)
+        # --- Summary ---
+        self.summary_label = QLabel("")
+        self.summary_label.setStyleSheet("font-size: 15px; color: #fff; padding: 10px;")
+        layout.addWidget(self.summary_label)
+        self.setLayout(layout)
+        self.current_history = []
+        self.current_total = 0
+    def load_clients(self):
+        self.client_combo.clear()
+        clients = self.db.get_all_clients()
+        for c in clients:
+            self.client_combo.addItem(f"{c[1]} (ID: {c[0]})", c[0])
+    def generate_history(self):
+        client_index = self.client_combo.currentIndex()
+        client_id = self.client_combo.itemData(client_index)
+        invoices = self.db.get_invoices_by_client(client_id)
+        self.current_history = invoices
+        self.table.setRowCount(len(invoices))
+        total_spent = 0
+        for row, inv in enumerate(invoices):
+            for col, value in enumerate(inv[:6]):
+                item = QTableWidgetItem()
+                if col == 0:
+                    item.setData(Qt.ItemDataRole.DisplayRole, int(value))
+                elif col == 2:
+                    item.setText(str(value))
+                elif col in [3, 4, 5]:
+                    try:
+                        float_value = float(value)
+                        item.setData(Qt.ItemDataRole.DisplayRole, float_value)
+                        item.setText(f"LPS {float_value:,.2f}")
+                        if col == 5:
+                            total_spent += float_value
+                    except (ValueError, TypeError):
+                        item.setText(str(value))
+                else:
+                    item.setText(str(value))
+                self.table.setItem(row, col, item)
+        self.current_total = total_spent
+        self.summary_label.setText(f"Total de compras: {len(invoices)} | Total gastado: LPS {total_spent:,.2f}")
+    def print_history(self):
+        from PyQt6.QtGui import QTextDocument, QPainter
+        from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
+        client_index = self.client_combo.currentIndex()
+        client_name = self.client_combo.currentText()
+        invoices = self.current_history
+        total_spent = self.current_total
+        html = f'''
+        <html>
+        <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; color: #222; }}
+            .header {{ font-size: 22px; font-weight: bold; margin-bottom: 10px; }}
+            .meta {{ margin-bottom: 10px; }}
+            .meta span {{ margin-right: 30px; }}
+            table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+            th, td {{ border: 1px solid #ccc; padding: 6px 10px; text-align: left; }}
+            th {{ background: #f0f0f0; }}
+            .totals td {{ border: none; font-size: 16px; }}
+            .totals tr td:first-child {{ text-align: right; }}
+        </style>
+        </head>
+        <body>
+            <div class="header">Historial de Compras</div>
+            <div class="meta">
+                <span><b>Cliente:</b> {client_name}</span>
+            </div>
+            <table>
+                <tr><th>ID Factura</th><th>Cliente</th><th>Fecha</th><th>Subtotal</th><th>ISV</th><th>Total</th></tr>
+        '''
+        for inv in invoices:
+            html += f'<tr>'
+            html += f'<td>{inv[0]}</td>'
+            html += f'<td>{inv[2]}</td>'
+            html += f'<td>{inv[3]}</td>'
+            html += f'<td>LPS {float(inv[4]):,.2f}</td>'
+            html += f'<td>LPS {float(inv[5]):,.2f}</td>'
+            html += f'<td>LPS {float(inv[6]):,.2f}</td>'
+            html += f'</tr>'
+        html += f'''
+            </table>
+            <table class="totals">
+                <tr><td><b>Total de compras:</b></td><td>{len(invoices)}</td></tr>
+                <tr><td><b>Total gastado:</b></td><td>LPS {total_spent:,.2f}</td></tr>
+            </table>
+        </body>
+        </html>
+        '''
+        doc = QTextDocument()
+        doc.setHtml(html)
+        printer = QPrinter()
+        dialog = QPrintDialog(printer)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            painter = QPainter(printer)
+            doc.drawContents(painter)
+            painter.end()
+
+class SettingsTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Settings icon
+        icon_label = QLabel()
+        pixmap = QPixmap('icons/settings.png')
+        if not pixmap.isNull():
+            icon_label.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            icon_label.setText('⚙️')
+            icon_label.setStyleSheet('font-size: 48px;')
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Settings text
+        text_label = QLabel("Settings")
+        text_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;")
+        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(icon_label)
+        layout.addWidget(text_label)
+        layout.addStretch()
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1486,7 +1818,7 @@ class MainWindow(QMainWindow):
         menu_items = [
             "Inventario", "Añadir producto", "Actualizar producto",
             "Clientes", "Añadir cliente", "Actualizar cliente",
-            "Generar Factura", "Administrar Facturas"
+            "Generar Factura", "Administrar Facturas", "Reportes de Ventas", "Historial de Compras"
         ]
         
         for item in menu_items:
@@ -1537,6 +1869,31 @@ class MainWindow(QMainWindow):
         welcome_tab = WelcomeTab()
         self.tab_widget.addTab(welcome_tab, "Inicio")
         self.tab_widget.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)  # Remove close button from welcome tab
+        
+        # Settings button at the bottom
+        self.settings_btn = QPushButton()
+        self.settings_btn.setText("  Settings")
+        self.settings_btn.setIcon(QIcon('icons/settings.png'))
+        self.settings_btn.setIconSize(QPixmap('icons/settings.png').size())
+        self.settings_btn.setCheckable(True)
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2c3e50;
+                color: white;
+                font-size: 15px;
+                padding: 15px;
+                border: none;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background-color: #34495e;
+            }
+            QPushButton:checked {
+                background-color: #3498db;
+            }
+        """)
+        self.settings_btn.clicked.connect(lambda: self.open_tab("Settings"))
+        menu_layout.addWidget(self.settings_btn)
 
     def open_tab(self, title):
         """Open a new tab or switch to existing one."""
@@ -1563,6 +1920,12 @@ class MainWindow(QMainWindow):
             new_tab = GenerateInvoiceTab()
         elif title == "Administrar Facturas":
             new_tab = ManageInvoicesTab()
+        elif title == "Reportes de Ventas":
+            new_tab = SalesReportTab()
+        elif title == "Historial de Compras":
+            new_tab = PurchaseHistoryTab()
+        elif title == "Settings":
+            new_tab = SettingsTab()
         else:
             new_tab = QWidget()
             layout = QVBoxLayout(new_tab)
