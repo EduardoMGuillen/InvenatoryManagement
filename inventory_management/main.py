@@ -3,12 +3,15 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QPushButton, QTabWidget, QLabel, QTabBar,
                             QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
                             QHeaderView, QMessageBox, QFormLayout, QSpinBox, QDoubleSpinBox, 
-                            QStyledItemDelegate, QDialog, QDateEdit)
+                            QStyledItemDelegate, QDialog, QDateEdit, QScrollArea, QGroupBox, 
+                            QCheckBox, QColorDialog)
 from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont, QIcon, QTextDocument, QPainter, QPixmap
+from PyQt6.QtGui import QFont, QIcon, QTextDocument, QPainter, QPixmap, QColor
 from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from login import LoginWindow
 from database import Database
+from settings_manager import SettingsManager
+from backup_manager import BackupManager
 
 class CurrencyDelegate(QStyledItemDelegate):
     def displayText(self, value, locale):
@@ -1755,30 +1758,291 @@ class PurchaseHistoryTab(QWidget):
 class SettingsTab(QWidget):
     def __init__(self):
         super().__init__()
+        self.settings_manager = SettingsManager()
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # Settings icon
-        icon_label = QLabel()
-        pixmap = QPixmap('icons/settings.png')
-        if not pixmap.isNull():
-            icon_label.setPixmap(pixmap.scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        else:
-            icon_label.setText('⚙️')
-            icon_label.setStyleSheet('font-size: 48px;')
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # Settings text
-        text_label = QLabel("Settings")
-        text_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50;")
-        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(icon_label)
-        layout.addWidget(text_label)
-        layout.addStretch()
+        layout.setSpacing(20)
+
+        # Create scroll area for settings
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        
+        # Create container widget for settings
+        settings_container = QWidget()
+        settings_layout = QVBoxLayout(settings_container)
+        settings_layout.setSpacing(20)
+
+        # Appearance Section
+        appearance_group = self.create_group_box("Apariencia")
+        appearance_layout = QFormLayout()
+        
+        # Theme selector
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Claro", "Oscuro"])
+        self.theme_combo.setCurrentText("Claro" if self.settings_manager.get_setting("theme") == "light" else "Oscuro")
+        self.theme_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("theme", "light" if t == "Claro" else "dark"))
+        appearance_layout.addRow("Tema:", self.theme_combo)
+        
+        # Font size
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(10, 20)
+        self.font_size_spin.setValue(self.settings_manager.get_setting("font_size"))
+        self.font_size_spin.valueChanged.connect(lambda v: self.settings_manager.set_setting("font_size", v))
+        appearance_layout.addRow("Tamaño de fuente:", self.font_size_spin)
+        
+        # Accent color
+        self.color_button = QPushButton()
+        self.color_button.setStyleSheet(f"background-color: {self.settings_manager.get_setting('accent_color')}; min-width: 100px;")
+        self.color_button.clicked.connect(self.choose_color)
+        appearance_layout.addRow("Color de acento:", self.color_button)
+        
+        appearance_group.setLayout(appearance_layout)
+        settings_layout.addWidget(appearance_group)
+
+        # Company Information Section
+        company_group = self.create_group_box("Información de la Empresa")
+        company_layout = QFormLayout()
+        
+        # Company name
+        self.company_name = QLineEdit(self.settings_manager.get_setting("company_name"))
+        self.company_name.textChanged.connect(lambda t: self.settings_manager.set_setting("company_name", t))
+        company_layout.addRow("Nombre:", self.company_name)
+        
+        # Company address
+        self.company_address = QLineEdit(self.settings_manager.get_setting("company_address"))
+        self.company_address.textChanged.connect(lambda t: self.settings_manager.set_setting("company_address", t))
+        company_layout.addRow("Dirección:", self.company_address)
+        
+        # Company phone
+        self.company_phone = QLineEdit(self.settings_manager.get_setting("company_phone"))
+        self.company_phone.textChanged.connect(lambda t: self.settings_manager.set_setting("company_phone", t))
+        company_layout.addRow("Teléfono:", self.company_phone)
+        
+        # Company email
+        self.company_email = QLineEdit(self.settings_manager.get_setting("company_email"))
+        self.company_email.textChanged.connect(lambda t: self.settings_manager.set_setting("company_email", t))
+        company_layout.addRow("Email:", self.company_email)
+        
+        # Company RTN
+        self.company_rtn = QLineEdit(self.settings_manager.get_setting("company_rtn"))
+        self.company_rtn.textChanged.connect(lambda t: self.settings_manager.set_setting("company_rtn", t))
+        company_layout.addRow("RTN:", self.company_rtn)
+        
+        company_group.setLayout(company_layout)
+        settings_layout.addWidget(company_group)
+
+        # Invoice Settings Section
+        invoice_group = self.create_group_box("Configuración de Facturas")
+        invoice_layout = QFormLayout()
+        
+        # Tax rate
+        self.tax_rate = QDoubleSpinBox()
+        self.tax_rate.setRange(0, 100)
+        self.tax_rate.setValue(self.settings_manager.get_setting("tax_rate"))
+        self.tax_rate.valueChanged.connect(lambda v: self.settings_manager.set_setting("tax_rate", v))
+        invoice_layout.addRow("Tasa de impuesto (%):", self.tax_rate)
+        
+        # Invoice prefix
+        self.invoice_prefix = QLineEdit(self.settings_manager.get_setting("invoice_prefix"))
+        self.invoice_prefix.textChanged.connect(lambda t: self.settings_manager.set_setting("invoice_prefix", t))
+        invoice_layout.addRow("Prefijo de factura:", self.invoice_prefix)
+        
+        invoice_group.setLayout(invoice_layout)
+        settings_layout.addWidget(invoice_group)
+
+        # Database Settings Section
+        database_group = self.create_group_box("Configuración de Base de Datos")
+        database_layout = QFormLayout()
+        
+        # Backup enabled
+        self.backup_enabled = QCheckBox()
+        self.backup_enabled.setChecked(self.settings_manager.get_setting("backup_enabled"))
+        self.backup_enabled.stateChanged.connect(lambda s: self.settings_manager.set_setting("backup_enabled", bool(s)))
+        database_layout.addRow("Habilitar respaldo automático:", self.backup_enabled)
+        
+        # Backup interval
+        self.backup_interval = QSpinBox()
+        self.backup_interval.setRange(1, 30)
+        self.backup_interval.setValue(self.settings_manager.get_setting("backup_interval_days"))
+        self.backup_interval.valueChanged.connect(lambda v: self.settings_manager.set_setting("backup_interval_days", v))
+        database_layout.addRow("Intervalo de respaldo (días):", self.backup_interval)
+        
+        # Backup folder
+        self.backup_folder = QLineEdit(self.settings_manager.get_setting("backup_folder"))
+        self.backup_folder.textChanged.connect(lambda t: self.settings_manager.set_setting("backup_folder", t))
+        database_layout.addRow("Carpeta de respaldo:", self.backup_folder)
+        
+        database_group.setLayout(database_layout)
+        settings_layout.addWidget(database_group)
+
+        # Default Values Section
+        defaults_group = self.create_group_box("Valores Predeterminados")
+        defaults_layout = QFormLayout()
+        
+        # Default product quantity
+        self.default_quantity = QSpinBox()
+        self.default_quantity.setRange(1, 1000)
+        self.default_quantity.setValue(self.settings_manager.get_setting("default_product_quantity"))
+        self.default_quantity.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_quantity", v))
+        defaults_layout.addRow("Cantidad predeterminada:", self.default_quantity)
+        
+        # Default product cost
+        self.default_cost = QDoubleSpinBox()
+        self.default_cost.setRange(0, 1000000)
+        self.default_cost.setValue(self.settings_manager.get_setting("default_product_cost"))
+        self.default_cost.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_cost", v))
+        defaults_layout.addRow("Costo predeterminado:", self.default_cost)
+        
+        # Default product price
+        self.default_price = QDoubleSpinBox()
+        self.default_price.setRange(0, 1000000)
+        self.default_price.setValue(self.settings_manager.get_setting("default_product_price"))
+        self.default_price.valueChanged.connect(lambda v: self.settings_manager.set_setting("default_product_price", v))
+        defaults_layout.addRow("Precio predeterminado:", self.default_price)
+        
+        defaults_group.setLayout(defaults_layout)
+        settings_layout.addWidget(defaults_group)
+
+        # Language Section
+        language_group = self.create_group_box("Idioma")
+        language_layout = QFormLayout()
+        
+        # Language selector
+        self.language_combo = QComboBox()
+        self.language_combo.addItems(["Español", "English"])
+        self.language_combo.setCurrentText("Español" if self.settings_manager.get_setting("language") == "es" else "English")
+        self.language_combo.currentTextChanged.connect(lambda t: self.settings_manager.set_setting("language", "es" if t == "Español" else "en"))
+        language_layout.addRow("Idioma:", self.language_combo)
+        
+        language_group.setLayout(language_layout)
+        settings_layout.addWidget(language_group)
+
+        # Auto-save Section
+        autosave_group = self.create_group_box("Auto-guardado")
+        autosave_layout = QFormLayout()
+        
+        # Auto-save enabled
+        self.autosave_enabled = QCheckBox()
+        self.autosave_enabled.setChecked(self.settings_manager.get_setting("auto_save_enabled"))
+        self.autosave_enabled.stateChanged.connect(lambda s: self.settings_manager.set_setting("auto_save_enabled", bool(s)))
+        autosave_layout.addRow("Habilitar auto-guardado:", self.autosave_enabled)
+        
+        # Auto-save interval
+        self.autosave_interval = QSpinBox()
+        self.autosave_interval.setRange(1, 60)
+        self.autosave_interval.setValue(self.settings_manager.get_setting("auto_save_interval_minutes"))
+        self.autosave_interval.valueChanged.connect(lambda v: self.settings_manager.set_setting("auto_save_interval_minutes", v))
+        autosave_layout.addRow("Intervalo de auto-guardado (minutos):", self.autosave_interval)
+        
+        autosave_group.setLayout(autosave_layout)
+        settings_layout.addWidget(autosave_group)
+
+        # Reset button
+        reset_btn = QPushButton("Restaurar valores predeterminados")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_settings)
+        settings_layout.addWidget(reset_btn)
+
+        # Add stretch to push everything to the top
+        settings_layout.addStretch()
+
+        # Set the scroll area's widget
+        scroll.setWidget(settings_container)
+        layout.addWidget(scroll)
+
+    def create_group_box(self, title):
+        """Create a styled group box for settings sections."""
+        group = QGroupBox(title)
+        group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #bdc3c7;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+        return group
+
+    def choose_color(self):
+        """Open color picker dialog for accent color."""
+        color = QColorDialog.getColor(QColor(self.settings_manager.get_setting("accent_color")))
+        if color.isValid():
+            self.settings_manager.set_setting("accent_color", color.name())
+            self.color_button.setStyleSheet(f"background-color: {color.name()}; min-width: 100px;")
+
+    def reset_settings(self):
+        """Reset all settings to default values."""
+        reply = QMessageBox.question(
+            self,
+            "Confirmar restablecimiento",
+            "¿Está seguro que desea restablecer todas las configuraciones a sus valores predeterminados?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.settings_manager.reset_to_defaults()
+            # Refresh all UI elements with new values
+            self.theme_combo.setCurrentText("Claro" if self.settings_manager.get_setting("theme") == "light" else "Oscuro")
+            self.font_size_spin.setValue(self.settings_manager.get_setting("font_size"))
+            self.color_button.setStyleSheet(f"background-color: {self.settings_manager.get_setting('accent_color')}; min-width: 100px;")
+            self.company_name.setText(self.settings_manager.get_setting("company_name"))
+            self.company_address.setText(self.settings_manager.get_setting("company_address"))
+            self.company_phone.setText(self.settings_manager.get_setting("company_phone"))
+            self.company_email.setText(self.settings_manager.get_setting("company_email"))
+            self.company_rtn.setText(self.settings_manager.get_setting("company_rtn"))
+            self.tax_rate.setValue(self.settings_manager.get_setting("tax_rate"))
+            self.invoice_prefix.setText(self.settings_manager.get_setting("invoice_prefix"))
+            self.backup_enabled.setChecked(self.settings_manager.get_setting("backup_enabled"))
+            self.backup_interval.setValue(self.settings_manager.get_setting("backup_interval_days"))
+            self.backup_folder.setText(self.settings_manager.get_setting("backup_folder"))
+            self.default_quantity.setValue(self.settings_manager.get_setting("default_product_quantity"))
+            self.default_cost.setValue(self.settings_manager.get_setting("default_product_cost"))
+            self.default_price.setValue(self.settings_manager.get_setting("default_product_price"))
+            self.language_combo.setCurrentText("Español" if self.settings_manager.get_setting("language") == "es" else "English")
+            self.autosave_enabled.setChecked(self.settings_manager.get_setting("auto_save_enabled"))
+            self.autosave_interval.setValue(self.settings_manager.get_setting("auto_save_interval_minutes"))
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sistema de Gestión")
         self.setMinimumSize(1200, 800)
+        
+        # Initialize managers
+        self.settings_manager = SettingsManager()
+        self.backup_manager = BackupManager(self.settings_manager)
+        
+        # Connect backup signals
+        self.backup_manager.backup_completed.connect(self.show_backup_message)
+        self.backup_manager.backup_failed.connect(self.show_backup_error)
+        
+        # Start backup timer
+        self.backup_manager.start_backup_timer()
+        
+        # Apply initial theme
+        self.apply_theme()
         
         # Create central widget and main layout
         central_widget = QWidget()
@@ -1894,6 +2158,114 @@ class MainWindow(QMainWindow):
         """)
         self.settings_btn.clicked.connect(lambda: self.open_tab("Settings"))
         menu_layout.addWidget(self.settings_btn)
+
+        # Connect settings changed signal
+        self.settings_manager.settings_changed.connect(self.on_settings_changed)
+
+    def apply_theme(self):
+        """Apply the current theme settings."""
+        theme = self.settings_manager.get_setting("theme")
+        font_size = self.settings_manager.get_setting("font_size")
+        accent_color = self.settings_manager.get_setting("accent_color")
+        
+        # Base stylesheet
+        if theme == "dark":
+            base_style = """
+                QWidget {
+                    background-color: #2c3e50;
+                    color: white;
+                }
+                QTableWidget {
+                    background-color: #34495e;
+                    color: white;
+                    gridline-color: #2c3e50;
+                }
+                QTableWidget::item {
+                    color: white;
+                }
+                QTableWidget::item:selected {
+                    background-color: #3498db;
+                }
+                QHeaderView::section {
+                    background-color: #2c3e50;
+                    color: white;
+                }
+                QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+                    background-color: #34495e;
+                    color: white;
+                    border: 1px solid #2c3e50;
+                }
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """
+        else:
+            base_style = """
+                QWidget {
+                    background-color: white;
+                    color: #2c3e50;
+                }
+                QTableWidget {
+                    background-color: white;
+                    color: #2c3e50;
+                    gridline-color: #bdc3c7;
+                }
+                QTableWidget::item {
+                    color: #2c3e50;
+                }
+                QTableWidget::item:selected {
+                    background-color: #d0e7fa;
+                }
+                QHeaderView::section {
+                    background-color: #e0e4ea;
+                    color: #2c3e50;
+                }
+                QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+                    background-color: white;
+                    color: #2c3e50;
+                    border: 1px solid #bdc3c7;
+                }
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """
+        
+        # Apply font size
+        base_style += f"""
+            QWidget {{
+                font-size: {font_size}px;
+            }}
+        """
+        
+        # Apply accent color
+        base_style += f"""
+            QPushButton:checked {{
+                background-color: {accent_color};
+            }}
+        """
+        
+        self.setStyleSheet(base_style)
+
+    def on_settings_changed(self):
+        """Handle settings changes."""
+        self.apply_theme()
+        self.backup_manager.start_backup_timer()
+
+    def show_backup_message(self, message):
+        """Show backup completion message."""
+        QMessageBox.information(self, "Backup", message)
+
+    def show_backup_error(self, error):
+        """Show backup error message."""
+        QMessageBox.critical(self, "Backup Error", error)
 
     def open_tab(self, title):
         """Open a new tab or switch to existing one."""
