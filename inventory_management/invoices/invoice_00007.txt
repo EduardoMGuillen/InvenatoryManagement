@@ -1,0 +1,17 @@
+Factura N°: 7
+Fecha: 2025-05-06 18:05:14
+Cliente: Carmen Rosa Vásquez (ID: 8)
+
+Detalle de productos:
+Cantidad  Nombre                        N° Serie       Precio         Subtotal       
+-------------------------------------------------------------------------------------
+2         Carretilla de Obra            SN1018         LPS 69.99       LPS 139.98      
+2         Cinta Aislante                SN1016         LPS 1.50        LPS 3.00        
+2         Cinta Métrica 5m              SN1006         LPS 3.99        LPS 7.98        
+1         Cúter Profesional             SN1012         LPS 2.99        LPS 2.99        
+1         Destornillador Plano          SN1002         LPS 4.50        LPS 4.50        
+
+
+Subtotal:           LPS 158.45
+ISV (15%):          LPS 23.77
+Total:              LPS 182.22

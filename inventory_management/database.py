@@ -33,6 +33,19 @@ class Database:
                     city TEXT NOT NULL
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS invoices (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id INTEGER,
+                    client_name TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    subtotal REAL NOT NULL,
+                    tax REAL NOT NULL,
+                    total REAL NOT NULL,
+                    file_path TEXT NOT NULL,
+                    FOREIGN KEY(client_id) REFERENCES clients(id)
+                )
+            """)
             conn.commit()
     
     def add_product(self, serial_number: str, name: str, quantity: int, cost: float, price: float) -> bool:
@@ -264,4 +277,26 @@ class Database:
                     "INSERT INTO clients (name, identity_id, rtn, phone, email, city) VALUES (?, ?, ?, ?, ?, ?)",
                     clients
                 )
-                conn.commit() 
+                conn.commit()
+
+    def add_invoice(self, client_id, client_name, date, subtotal, tax, total, file_path):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO invoices (client_id, client_name, date, subtotal, tax, total, file_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (client_id, client_name, date, subtotal, tax, total, file_path))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_all_invoices(self):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM invoices ORDER BY date DESC")
+            return cursor.fetchall()
+
+    def get_invoice_by_id(self, invoice_id):
+        with sqlite3.connect(self.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+            return cursor.fetchone() 

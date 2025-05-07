@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHeaderView, QMessageBox, QFormLayout, QSpinBox, QDoubleSpinBox, QStyledItemDelegate)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtPrintSupport import QPrinter, QPrintDialog
 from login import LoginWindow
 from database import Database
 
@@ -940,6 +941,175 @@ class UpdateClientTab(QWidget):
         self.email_input.clear()
         self.city_input.clear()
 
+class GenerateInvoiceTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.db = Database()
+        layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        # --- Client selection ---
+        client_layout = QHBoxLayout()
+        self.client_combo = QComboBox()
+        self.load_clients()
+        client_layout.addWidget(QLabel("Cliente:"))
+        client_layout.addWidget(self.client_combo)
+        layout.addLayout(client_layout)
+        # --- Product selection table ---
+        self.products_table = QTableWidget()
+        self.products_table.setColumnCount(6)
+        self.products_table.setHorizontalHeaderLabels([
+            "ID", "Nombre", "Número de Serie", "Precio (LPS)", "Disponible", "Cantidad"
+        ])
+        self.products_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.products_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.products_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.products_table.setAlternatingRowColors(True)
+        layout.addWidget(self.products_table)
+        # --- Add to invoice button ---
+        self.add_btn = QPushButton("Agregar a Factura")
+        self.add_btn.clicked.connect(self.add_to_invoice)
+        layout.addWidget(self.add_btn)
+        # --- Invoice preview ---
+        self.invoice_table = QTableWidget()
+        self.invoice_table.setColumnCount(5)
+        self.invoice_table.setHorizontalHeaderLabels([
+            "ID", "Nombre", "Cantidad", "Precio Unitario", "Subtotal"
+        ])
+        self.invoice_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.invoice_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.invoice_table.setAlternatingRowColors(True)
+        layout.addWidget(self.invoice_table)
+        # --- Totals ---
+        totals_layout = QHBoxLayout()
+        self.subtotal_label = QLabel("Subtotal: LPS 0.00")
+        self.tax_label = QLabel("ISV (15%): LPS 0.00")
+        self.total_label = QLabel("Total: LPS 0.00")
+        totals_layout.addWidget(self.subtotal_label)
+        totals_layout.addWidget(self.tax_label)
+        totals_layout.addWidget(self.total_label)
+        totals_layout.addStretch()
+        layout.addLayout(totals_layout)
+        # --- Generate invoice button ---
+        self.generate_btn = QPushButton("Generar Factura")
+        self.generate_btn.clicked.connect(self.generate_invoice)
+        layout.addWidget(self.generate_btn)
+        # --- Feedback ---
+        self.feedback = QLabel("")
+        layout.addWidget(self.feedback)
+        self.setLayout(layout)
+        self.selected_products = []  # (product_id, name, serial, qty, price, subtotal)
+        self.load_products()
+    def load_clients(self):
+        self.client_combo.clear()
+        clients = self.db.get_all_clients()
+        for c in clients:
+            self.client_combo.addItem(f"{c[1]} (ID: {c[0]})", c[0])
+    def load_products(self):
+        self.products_table.setRowCount(0)
+        products = self.db.get_all_products()
+        for row, prod in enumerate(products):
+            self.products_table.insertRow(row)
+            # prod: (id, serial_number, name, quantity, cost, price)
+            # Table columns: ID, Nombre, Número de Serie, Precio (LPS), Disponible, Cantidad
+            self.products_table.setItem(row, 0, QTableWidgetItem(str(prod[0])))  # ID
+            self.products_table.setItem(row, 1, QTableWidgetItem(prod[2]))       # Nombre
+            self.products_table.setItem(row, 2, QTableWidgetItem(prod[1]))       # Número de Serie
+            self.products_table.setItem(row, 3, QTableWidgetItem(f"{prod[5]:.2f}"))  # Precio (LPS)
+            self.products_table.setItem(row, 4, QTableWidgetItem(str(prod[3])))  # Disponible
+            spin = QSpinBox()
+            spin.setRange(0, int(prod[3]))
+            self.products_table.setCellWidget(row, 5, spin)
+    def add_to_invoice(self):
+        # Add selected products to invoice preview, now including serial number
+        for row in range(self.products_table.rowCount()):
+            spin = self.products_table.cellWidget(row, 5)
+            qty = spin.value()
+            if qty > 0:
+                prod_id = int(self.products_table.item(row, 0).text())
+                name = self.products_table.item(row, 1).text()
+                serial = self.products_table.item(row, 2).text()
+                price = float(self.products_table.item(row, 3).text())
+                subtotal = qty * price
+                # Check if product already in selected_products
+                found = False
+                for i, (pid, n, s, q, p, sub) in enumerate(self.selected_products):
+                    if pid == prod_id and s == serial:
+                        # Update quantity and subtotal
+                        new_qty = q + qty
+                        new_sub = new_qty * price
+                        self.selected_products[i] = (pid, n, s, new_qty, p, new_sub)
+                        found = True
+                        break
+                if not found:
+                    self.selected_products.append((prod_id, name, serial, qty, price, subtotal))
+                spin.setValue(0)
+        self.update_invoice_table()
+    def update_invoice_table(self):
+        # Update invoice preview table to include serial number
+        self.invoice_table.setColumnCount(6)
+        self.invoice_table.setHorizontalHeaderLabels([
+            "ID", "Nombre", "Número de Serie", "Cantidad", "Precio Unitario", "Subtotal"
+        ])
+        self.invoice_table.setRowCount(len(self.selected_products))
+        subtotal = 0
+        for row, (prod_id, name, serial, qty, price, sub) in enumerate(self.selected_products):
+            self.invoice_table.setItem(row, 0, QTableWidgetItem(str(prod_id)))
+            self.invoice_table.setItem(row, 1, QTableWidgetItem(name))
+            self.invoice_table.setItem(row, 2, QTableWidgetItem(serial))
+            self.invoice_table.setItem(row, 3, QTableWidgetItem(str(qty)))
+            self.invoice_table.setItem(row, 4, QTableWidgetItem(f"LPS {price:.2f}"))
+            self.invoice_table.setItem(row, 5, QTableWidgetItem(f"LPS {sub:.2f}"))
+            subtotal += sub
+        tax = subtotal * 0.15
+        total = subtotal + tax
+        self.subtotal_label.setText(f"Subtotal: LPS {subtotal:.2f}")
+        self.tax_label.setText(f"ISV (15%): LPS {tax:.2f}")
+        self.total_label.setText(f"Total: LPS {total:.2f}")
+    def generate_invoice(self):
+        import datetime, os
+        if not self.selected_products:
+            self.feedback.setText("Seleccione productos para la factura.")
+            return
+        client_index = self.client_combo.currentIndex()
+        client_id = self.client_combo.itemData(client_index)
+        client_name = self.client_combo.currentText().split(' (ID:')[0]
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        subtotal = sum(sub for *_, sub in self.selected_products)
+        tax = subtotal * 0.15
+        total = subtotal + tax
+        # Generate invoice text
+        # First, get a new invoice ID by checking the max ID in the DB
+        import sqlite3
+        with sqlite3.connect(self.db.db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MAX(id) FROM invoices")
+            row = cursor.fetchone()
+            invoice_id = (row[0] or 0) + 1
+        filename = f"invoices/invoice_{invoice_id:05d}.txt"
+        lines = [
+            f"Factura N°: {invoice_id}",
+            f"Fecha: {now}",
+            f"Cliente: {client_name} (ID: {client_id})",
+            "\nDetalle de productos:",
+            f"{'Cantidad':<10}{'Nombre':<30}{'N° Serie':<15}{'Precio':<15}{'Subtotal':<15}",
+            "-"*85
+        ]
+        for prod_id, name, serial, qty, price, sub in self.selected_products:
+            lines.append(f"{qty:<10}{name:<30}{serial:<15}LPS {price:<12.2f}LPS {sub:<12.2f}")
+        lines += [
+            "\n",
+            f"{'Subtotal:':<20}LPS {subtotal:.2f}",
+            f"{'ISV (15%):':<20}LPS {tax:.2f}",
+            f"{'Total:':<20}LPS {total:.2f}"
+        ]
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        # Now add invoice record with correct file path
+        self.db.add_invoice(client_id, client_name, now, subtotal, tax, total, filename)
+        self.feedback.setText(f"Factura generada: {filename}")
+        self.selected_products.clear()
+        self.update_invoice_table()
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -984,7 +1154,7 @@ class MainWindow(QMainWindow):
         menu_items = [
             "Inventario", "Añadir producto", "Actualizar producto",
             "Clientes", "Añadir cliente", "Actualizar cliente",
-            "Generar Factura", "Ventas"
+            "Generar Factura", "Administrar Facturas"
         ]
         
         for item in menu_items:
@@ -1057,6 +1227,10 @@ class MainWindow(QMainWindow):
             new_tab = AddClientTab()
         elif title == "Actualizar cliente":
             new_tab = UpdateClientTab()
+        elif title == "Generar Factura":
+            new_tab = GenerateInvoiceTab()
+        elif title == "Administrar Facturas":
+            new_tab = ManageInvoicesTab()
         else:
             new_tab = QWidget()
             layout = QVBoxLayout(new_tab)
