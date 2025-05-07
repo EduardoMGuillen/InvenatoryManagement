@@ -14,8 +14,8 @@ A modern and user-friendly inventory management system built with PyQt6, designe
 - **Add Clients**: Add new clients with validation for unique ID and RTN
 - **Update Clients**: Search and update client information with a dedicated tab
 - **Test Data**: The system auto-populates with 30 sample clients and 20 products for testing/demo
-- **Sales Tracking**: Monitor and analyze sales data
-- **Invoice Generation**: Create and manage invoices easily
+- **Invoice Generation**: Create and manage invoices easily, with printable and exportable .txt files
+- **Invoice Management**: Search, view, print, and delete invoices by client name or invoice ID in the "Administrar Facturas" tab
 - **Localized Currency**: All cost and price fields use LPS (Lempiras) for compatibility with local businesses
 
 ## Screenshots
@@ -60,6 +60,19 @@ _Add new clients with validation_
 ![Update Client Tab](screenshots/update_client.png)
 _Update client information easily_
 
+### Invoice Management Tab
+
+![Invoice Management Tab](screenshots/manage_invoices.png)
+_Administrar Facturas: Search, view, print, and delete invoices_
+
+## Invoice Management
+
+- **Administrar Facturas Tab**: View, search, print, and delete invoices by client name or invoice ID.
+- **Print Invoices**: Print any invoice directly from the app.
+- **Delete Invoices**: Remove invoices from the database and delete their .txt files.
+- **Search**: Quickly find invoices by client name or invoice ID.
+- **No More Ventas Tab**: All invoice management is now centralized in "Administrar Facturas" for simplicity.
+
 ## Client Management
 
 - **Clients Tab**: View all clients in a sortable, searchable table. Sort by ID, name, RTN, city, and more (ASC/DESC).
@@ -73,7 +86,7 @@ _Update client information easily_
 - **Streamlined Operations**: Manage all aspects of your business from a single application
 - **Improved Efficiency**: Quick access to inventory levels and customer information
 - **Better Organization**: Keep track of products, sales, and customer data in one place
-- **Professional Invoicing**: Generate professional invoices for your customers
+- **Professional Invoicing**: Generate and print professional invoices for your customers
 - **Data Security**: Secure login system to protect your business information
 - **Localized for Honduras**: LPS currency support for accurate financial management
 
