@@ -20,18 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# Database
-*.db
-*.sqlite3
-
-# Backups
-backups/
-facturas/
-
-# Environment
-.env
-.venv
-env/
+# Virtual Environment
 venv/
 ENV/
 
@@ -41,6 +30,23 @@ ENV/
 *.swp
 *.swo
 
-# OS
+# Project specific
+inventory.db
+settings.json
+backups/*
+!backups/.gitkeep
+invoices/*
+!invoices/.gitkeep
+Invoices/*
+!Invoices/.gitkeep
+
+# Logs
+*.log
+
+# Local configuration
+.env
+.env.local
+
+# System files
 .DS_Store
 Thumbs.db 

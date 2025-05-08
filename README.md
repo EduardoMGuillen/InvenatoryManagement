@@ -1,52 +1,61 @@
-# Sistema de Gestión de Inventario
+# Sistema de Inventario - BizzTrackPro
 
-Un sistema completo de gestión de inventario desarrollado en Python con PyQt6, diseñado para pequeñas y medianas empresas.
+Un sistema completo de gestión de inventario desarrollado con PyQt6, diseñado para pequeñas y medianas empresas.
 
 ## Características
 
-- **Gestión de Inventario**
+### Gestión de Inventario
 
-  - Añadir, actualizar y eliminar productos
-  - Seguimiento de stock en tiempo real
-  - Búsqueda rápida por ID, nombre o número de serie
+- Visualización completa del inventario
+- Agregar nuevos productos
+- Actualizar productos existentes
+- Búsqueda por ID, nombre o número de serie
+- Control de stock automático
 
-- **Gestión de Clientes**
+### Gestión de Clientes
 
-  - Registro completo de clientes
-  - Actualización y eliminación de registros
-  - Búsqueda por nombre, ID o RTN
+- Base de datos completa de clientes
+- Agregar nuevos clientes
+- Actualizar información de clientes
+- Búsqueda por nombre, ID o RTN
+- Historial de compras por cliente
 
-- **Sistema de Facturación**
+### Facturación
 
-  - Generación de facturas
-  - Cálculo automático de ISV
-  - Historial de facturas
-  - Impresión de facturas
+- Generación de facturas
+- Vista previa antes de generar
+- Cálculo automático de ISV
+- Historial completo de facturas
+- Opciones para imprimir o guardar en formato texto
 
-- **Reportes**
+### Reportes
 
-  - Reportes de ventas por período
-  - Historial de compras por cliente
-  - Exportación de reportes
+- Reportes de ventas por período
+- Historial de compras por cliente
+- Estadísticas de ventas
+- Exportación e impresión de reportes
 
-- **Backup y Seguridad**
-  - Sistema de backup automático por correo
-  - Restauración de backups
-  - Autenticación de usuarios
+### Respaldo y Seguridad
+
+- Sistema de backup automático
+- Respaldos por correo electrónico
+- Restauración de backups
+- Protección con login
 
 ## Requisitos
 
 - Python 3.8 o superior
 - PyQt6
 - SQLite3
+- Conexión a Internet (para backups por email)
 
 ## Instalación
 
 1. Clone el repositorio:
 
 ```bash
-git clone https://github.com/your-username/inventory_management.git
-cd inventory_management
+git clone https://github.com/yourusername/inventory-management.git
+cd inventory-management
 ```
 
 2. Instale las dependencias:
@@ -57,83 +66,60 @@ pip install -r requirements.txt
 
 3. Configure el archivo de configuración:
 
-- Copie `config.example.ini` a `config.ini`
-- Actualice las configuraciones según sus necesidades
+- Abra la aplicación
+- Vaya a "Configuración"
+- Configure los datos de la empresa
+- Configure el correo para backups
 
-4. Ejecute la aplicación:
+## Uso
+
+1. Inicie la aplicación:
 
 ```bash
 python main.py
 ```
 
-## Configuración del Sistema de Backup
+2. Inicie sesión con sus credenciales
 
-Para configurar el sistema de backup por correo:
+3. Navegue por las diferentes secciones:
 
-1. Active la autenticación de dos factores en su cuenta de Gmail
-2. Genere una contraseña de aplicación
-3. Configure los siguientes parámetros en la aplicación:
-   - Email de origen (bizztrackpro@gmail.com)
-   - Email de destino para backups
-   - Frecuencia de backup (diaria/semanal/mensual)
+- Inventario
+- Clientes
+- Facturación
+- Reportes
+- Configuración
 
-## Estructura del Proyecto
+## Configuración de Backup
+
+El sistema utiliza Gmail para enviar backups. Para configurarlo:
+
+1. Configure una cuenta de Gmail
+2. Active la autenticación de dos factores
+3. Genere una contraseña de aplicación
+4. Use estas credenciales en la configuración de backup
+
+## Estructura de Archivos
 
 ```
-inventory_management/
+inventory-management/
 ├── main.py              # Punto de entrada principal
 ├── database.py          # Gestión de base de datos
-├── login.py            # Sistema de autenticación
-├── backup_manager.py   # Gestión de backups
-├── settings_manager.py # Gestión de configuración
+├── login.py             # Sistema de autenticación
+├── backup_manager.py    # Gestión de backups
+├── settings_manager.py  # Gestión de configuración
 ├── currency_formatter.py # Formateo de moneda
-├── icons/              # Iconos de la aplicación
-├── backups/           # Directorio de backups
-└── facturas/          # Directorio de facturas
+├── requirements.txt     # Dependencias
+└── README.md           # Este archivo
 ```
-
-## Uso
-
-1. **Inicio de Sesión**
-
-   - Use las credenciales proporcionadas por el administrador
-
-2. **Gestión de Inventario**
-
-   - Navegue a la pestaña "Inventario" para ver todos los productos
-   - Use "Agregar Producto" para nuevos items
-   - Use "Actualizar Producto" para modificar existentes
-
-3. **Gestión de Clientes**
-
-   - Similar a la gestión de inventario
-   - Mantenga registros actualizados de clientes
-
-4. **Facturación**
-
-   - Seleccione cliente
-   - Agregue productos
-   - Genere e imprima facturas
-
-5. **Reportes**
-   - Acceda a reportes desde el menú principal
-   - Filtre por fechas según necesidad
 
 ## Soporte
 
-Para soporte técnico o reportar problemas:
-
-- Abra un issue en GitHub
-- Contacte al equipo de desarrollo
+Para soporte técnico o reportar problemas, por favor abra un issue en el repositorio de GitHub.
 
 ## Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+Este proyecto está licenciado bajo la Licencia MIT - vea el archivo LICENSE para más detalles.
 
 ## Contribuir
 
-1. Fork el proyecto
-2. Cree una rama para su característica (`git checkout -b feature/AmazingFeature`)
-3. Commit sus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abra un Pull Request
+Las contribuciones son bienvenidas. Por favor, lea CONTRIBUTING.md para detalles sobre nuestro código de conducta y el proceso para enviarnos pull requests.

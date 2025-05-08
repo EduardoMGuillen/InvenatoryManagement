@@ -9,6 +9,22 @@ class SettingsManager(QObject):
         super().__init__()
         self.settings = QSettings("BizztrackPro", "InventoryManagement")
         self.set_default_settings()
+        self.force_update_smtp_settings()  # Force update SMTP settings
+
+    def force_update_smtp_settings(self):
+        """Force update the SMTP settings."""
+        self.settings.setValue("smtp_username", "bizztrackpro@gmail.com")
+        self.settings.setValue("smtp_password", "zwxhhgnkoqdmrtww")
+        self.settings.setValue("smtp_server", "smtp.gmail.com")
+        self.settings.setValue("smtp_port", 587)
+        self.settings.sync()
+        
+        # Verify settings
+        print("Debug - Current SMTP Settings:")
+        print(f"Username: {self.settings.value('smtp_username')}")
+        print(f"Password length: {len(self.settings.value('smtp_password', ''))}")
+        print(f"Server: {self.settings.value('smtp_server')}")
+        print(f"Port: {self.settings.value('smtp_port')}")
 
     def set_default_settings(self):
         # Set default values if they don't exist
@@ -25,18 +41,16 @@ class SettingsManager(QObject):
             
             # Invoice Settings
             "invoice_prefix": "FAC",
-            "invoice_folder": "facturas",
+            "invoice_folder": "invoices",
             "tax_rate": 15.0,
             
             # Backup settings
             "backup_recipient_email": "",  # User will set this in settings
             "backup_frequency": "daily",
-            
-            # Fixed Gmail sender settings
             "smtp_server": "smtp.gmail.com",
             "smtp_port": 587,
-            "smtp_sender_email": "bizztrackpro@gmail.com",  # Fixed sender
-            "smtp_password": "uwxtjvudilfyllkf",  # New App password without spaces
+            "smtp_username": "bizztrackpro@gmail.com",  # Fixed sender
+            "smtp_password": "zwxhhgnkoqdmrtww",  # App password
             "last_backup": None
         }
         
@@ -53,11 +67,15 @@ class SettingsManager(QObject):
         
         # Handle type conversion based on the setting key
         if key in ["font_size", "smtp_port"]:
-            return int(value) if value is not None else default
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default if default is not None else 0
         elif key in ["tax_rate"]:
-            return float(value) if value is not None else default
-        elif key in ["backup_enabled"]:
-            return bool(value) if value is not None else default
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default if default is not None else 0.0
         else:
             return value
 

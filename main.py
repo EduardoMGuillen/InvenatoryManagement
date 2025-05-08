@@ -1441,22 +1441,32 @@ class ManageInvoicesTab(QWidget):
         self.table.setRowCount(len(invoices))
         self.table.clearContents()
         for row, invoice in enumerate(invoices):
-            for col, value in enumerate(invoice[:-1]):  # Exclude file_path
+            # invoice format: (id, client_id, client_name, date, subtotal, tax, total, file_path)
+            for col, value in enumerate(invoice):  # Process all columns
+                if col >= 7:  # Skip file_path
+                    continue
+                    
                 item = QTableWidgetItem()
                 if col == 0:  # ID
                     item.setData(Qt.ItemDataRole.DisplayRole, int(value))
-                elif col == 2:  # Date
+                    self.table.setItem(row, 0, item)
+                elif col == 1:  # Skip client_id
+                    continue
+                elif col == 2:  # Client name
                     item.setText(str(value))
-                elif col in [3, 4, 5]:  # Subtotal, ISV, Total
+                    self.table.setItem(row, 1, item)
+                elif col == 3:  # Date
+                    item.setText(str(value))
+                    self.table.setItem(row, 2, item)
+                elif col in [4, 5, 6]:  # Subtotal, ISV, Total
                     try:
                         float_value = float(value)
                         item.setData(Qt.ItemDataRole.DisplayRole, float_value)
                         item.setText(f"LPS {float_value:,.2f}")
+                        self.table.setItem(row, col - 1, item)  # Adjust column index
                     except (ValueError, TypeError):
                         item.setText(str(value))
-                else:  # Client name
-                    item.setText(str(value))
-                self.table.setItem(row, col, item)
+                        self.table.setItem(row, col - 1, item)
     def get_selected_invoice(self):
         selected = self.table.currentRow()
         if selected < 0:
@@ -1662,24 +1672,34 @@ class SalesReportTab(QWidget):
         self.table.setRowCount(len(invoices))
         total_sales = 0
         for row, inv in enumerate(invoices):
-            for col, value in enumerate(inv[:6]):
+            # inv format: (id, client_id, client_name, date, subtotal, tax, total, file_path)
+            for col, value in enumerate(inv):  # Process all columns
+                if col >= 7:  # Skip file_path
+                    continue
+                    
                 item = QTableWidgetItem()
-                if col == 0:
+                if col == 0:  # ID
                     item.setData(Qt.ItemDataRole.DisplayRole, int(value))
-                elif col == 2:
+                    self.table.setItem(row, 0, item)
+                elif col == 1:  # Skip client_id
+                    continue
+                elif col == 2:  # Client name
                     item.setText(str(value))
-                elif col in [3, 4, 5]:
+                    self.table.setItem(row, 1, item)
+                elif col == 3:  # Date
+                    item.setText(str(value))
+                    self.table.setItem(row, 2, item)
+                elif col in [4, 5, 6]:  # Subtotal, ISV, Total
                     try:
                         float_value = float(value)
                         item.setData(Qt.ItemDataRole.DisplayRole, float_value)
                         item.setText(f"LPS {float_value:,.2f}")
-                        if col == 5:
+                        self.table.setItem(row, col - 1, item)  # Adjust column index
+                        if col == 6:  # Total
                             total_sales += float_value
                     except (ValueError, TypeError):
                         item.setText(str(value))
-                else:
-                    item.setText(str(value))
-                self.table.setItem(row, col, item)
+                        self.table.setItem(row, col - 1, item)
         self.current_total = total_sales
         self.summary_label.setText(f"Total de facturas: {len(invoices)} | Ventas totales: LPS {total_sales:,.2f}")
     def print_report(self):
@@ -1817,24 +1837,34 @@ class PurchaseHistoryTab(QWidget):
         self.table.setRowCount(len(invoices))
         total_spent = 0
         for row, inv in enumerate(invoices):
-            for col, value in enumerate(inv[:6]):
+            # inv format: (id, client_id, client_name, date, subtotal, tax, total, file_path)
+            for col, value in enumerate(inv):  # Process all columns
+                if col >= 7:  # Skip file_path
+                    continue
+                    
                 item = QTableWidgetItem()
-                if col == 0:
+                if col == 0:  # ID
                     item.setData(Qt.ItemDataRole.DisplayRole, int(value))
-                elif col == 2:
+                    self.table.setItem(row, 0, item)
+                elif col == 1:  # Skip client_id
+                    continue
+                elif col == 2:  # Client name
                     item.setText(str(value))
-                elif col in [3, 4, 5]:
+                    self.table.setItem(row, 1, item)
+                elif col == 3:  # Date
+                    item.setText(str(value))
+                    self.table.setItem(row, 2, item)
+                elif col in [4, 5, 6]:  # Subtotal, ISV, Total
                     try:
                         float_value = float(value)
                         item.setData(Qt.ItemDataRole.DisplayRole, float_value)
                         item.setText(f"LPS {float_value:,.2f}")
-                        if col == 5:
+                        self.table.setItem(row, col - 1, item)  # Adjust column index
+                        if col == 6:  # Total
                             total_spent += float_value
                     except (ValueError, TypeError):
                         item.setText(str(value))
-                else:
-                    item.setText(str(value))
-                self.table.setItem(row, col, item)
+                        self.table.setItem(row, col - 1, item)
         self.current_total = total_spent
         self.summary_label.setText(f"Total de compras: {len(invoices)} | Total gastado: LPS {total_spent:,.2f}")
     def print_history(self):
@@ -1898,50 +1928,45 @@ class SettingsTab(QWidget):
     def __init__(self, settings_manager, parent=None):
         super().__init__(parent)
         self.settings_manager = settings_manager
-        self.main_window = self.get_main_window()
+        self.main_window = parent
         self.setup_ui()
-
-    def get_main_window(self):
-        """Get reference to the main window."""
-        parent = self.parent()
-        while parent is not None:
-            if isinstance(parent, QMainWindow):
-                return parent
-            parent = parent.parent()
-        return None
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # Create scroll area
+        # Create scroll area for settings
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # Create content widget for scroll area
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(20)
         
         # Appearance Settings
         appearance_group = QGroupBox("Apariencia")
         appearance_layout = QFormLayout()
         
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Claro", "Oscuro"])
+        self.theme_combo.addItems(["light", "dark"])
         self.theme_combo.setCurrentText(self.settings_manager.get_setting("theme"))
         appearance_layout.addRow("Tema:", self.theme_combo)
         
         self.font_size_spin = QSpinBox()
-        self.font_size_spin.setRange(8, 20)
+        self.font_size_spin.setRange(8, 24)
         self.font_size_spin.setValue(self.settings_manager.get_setting("font_size"))
         appearance_layout.addRow("Tamaño de Fuente:", self.font_size_spin)
         
         appearance_group.setLayout(appearance_layout)
         scroll_layout.addWidget(appearance_group)
         
-        # Company Settings
+        # Company Info
         company_group = QGroupBox("Información de la Empresa")
         company_layout = QFormLayout()
         
         self.company_name = QLineEdit(self.settings_manager.get_setting("company_name"))
-        company_layout.addRow("Nombre de la Empresa:", self.company_name)
+        company_layout.addRow("Nombre:", self.company_name)
         
         self.company_address = QLineEdit(self.settings_manager.get_setting("company_address"))
         company_layout.addRow("Dirección:", self.company_address)
@@ -2023,6 +2048,23 @@ class SettingsTab(QWidget):
         
         QMessageBox.information(self, "Configuración", "Configuración guardada exitosamente.")
 
+    def create_backup(self):
+        """Create a backup using the backup manager."""
+        try:
+            # Check if email is configured
+            recipient_email = self.settings_manager.get_setting("backup_recipient_email")
+            if not recipient_email:
+                QMessageBox.warning(self, "Error", "Por favor configure un email para recibir backups antes de crear uno.")
+                return
+
+            # Create backup using the main window's backup manager
+            if self.main_window and hasattr(self.main_window, 'backup_manager'):
+                self.main_window.backup_manager.create_backup()
+            else:
+                QMessageBox.critical(self, "Error", "No se pudo acceder al administrador de backups.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al crear backup: {str(e)}")
+
     def restore_backup(self):
         """Restore database from a backup file."""
         try:
@@ -2073,14 +2115,6 @@ class SettingsTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al restaurar backup: {str(e)}")
 
-    def create_backup(self):
-        """Create a backup using the backup manager."""
-        try:
-            if self.main_window and hasattr(self.main_window, 'backup_manager'):
-                self.main_window.backup_manager.create_backup()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error al crear backup: {str(e)}")
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2089,6 +2123,9 @@ class MainWindow(QMainWindow):
         self.backup_manager.backup_completed.connect(self.show_backup_message)
         self.backup_manager.backup_failed.connect(self.show_backup_error)
         self.backup_manager.start_backup_timer()
+        
+        # Initialize database
+        self.db = Database()
         
         self.setWindowTitle("Sistema de Inventario")
         self.setMinimumSize(1200, 800)
@@ -2150,127 +2187,23 @@ class MainWindow(QMainWindow):
         # Open Inicio tab by default
         self.open_tab("Inicio")
 
-    def create_backup(self):
-        """Create a backup of the database and send it via email."""
-        try:
-            # Get backup email from settings
-            backup_email = self.settings_manager.get_setting("backup_recipient_email")
-            if not backup_email:
-                QMessageBox.warning(self, "Backup", "Por favor configure un email para backups en Configuración.")
-                return
+    def show_backup_message(self, message):
+        """Show a success message for backup operations."""
+        QMessageBox.information(self, "Backup", message)
 
-            # Create backup directory if it doesn't exist
-            backup_dir = "backups"
-            os.makedirs(backup_dir, exist_ok=True)
+    def show_backup_error(self, error):
+        """Show an error message for backup operations."""
+        QMessageBox.critical(self, "Error de Backup", error)
 
-            # Create backup filename with timestamp
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_file = f"{backup_dir}/backup_{timestamp}.db"
-
-            # Copy database file
-            import shutil
-            shutil.copy2("inventory.db", backup_file)
-
-            # Send email with backup
-            self.send_backup_email(backup_file, backup_email)
-
-            QMessageBox.information(self, "Backup", "Backup creado y enviado exitosamente.")
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error al crear backup: {str(e)}")
-
-    def send_backup_email(self, backup_file, recipient_email):
-        """Send backup file via email."""
-        try:
-            import smtplib
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.text import MIMEText
-            from email.mime.application import MIMEApplication
-
-            # Get email settings from settings manager
-            smtp_server = self.settings_manager.get_setting("smtp_server")
-            smtp_port = self.settings_manager.get_setting("smtp_port")
-            smtp_username = self.settings_manager.get_setting("smtp_username")
-            smtp_password = self.settings_manager.get_setting("smtp_password")
-
-            # Create message
-            msg = MIMEMultipart()
-            msg['From'] = smtp_username
-            msg['To'] = recipient_email
-            msg['Subject'] = "Backup de Base de Datos"
-
-            # Add body
-            body = "Adjunto encontrará el backup de la base de datos."
-            msg.attach(MIMEText(body, 'plain'))
-
-            # Attach backup file
-            with open(backup_file, 'rb') as f:
-                attach = MIMEApplication(f.read(), _subtype="db")
-                attach.add_header('Content-Disposition', 'attachment', filename=os.path.basename(backup_file))
-                msg.attach(attach)
-
-            # Send email
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.starttls()
-            server.login(smtp_username, smtp_password)
-            server.send_message(msg)
-            server.quit()
-
-        except Exception as e:
-            raise Exception(f"Error al enviar email: {str(e)}")
-
-    def restore_backup(self):
-        """Restore database from a backup file."""
-        try:
-            # Open file dialog to select backup file
-            file_name, _ = QFileDialog.getOpenFileName(
-                self,
-                "Seleccionar Backup",
-                "backups",
-                "Database Files (*.db)"
-            )
-
-            if not file_name:
-                return
-
-            # Confirm restore
-            reply = QMessageBox.question(
-                self,
-                "Confirmar Restauración",
-                "¿Está seguro que desea restaurar este backup? Se perderán todos los datos actuales.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-
-            if reply == QMessageBox.StandardButton.Yes:
-                # Close current database connection
-                self.db.close()
-
-                # Copy backup file to current database
-                import shutil
-                shutil.copy2(file_name, "inventory.db")
-
-                # Reopen database connection
-                self.db = Database()
-
-                QMessageBox.information(self, "Restauración", "Backup restaurado exitosamente.")
-                # Refresh all tabs
-                self.refresh_all_tabs()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Error al restaurar backup: {str(e)}")
-
-    def refresh_all_tabs(self):
-        """Refresh all open tabs to reflect restored data."""
-        for i in range(self.tab_widget.count()):
-            tab = self.tab_widget.widget(i)
-            if hasattr(tab, 'load_products'):
-                tab.load_products()
-            elif hasattr(tab, 'load_clients'):
-                tab.load_clients()
-            elif hasattr(tab, 'load_invoices'):
-                tab.load_invoices()
+    def close_tab(self, index):
+        if self.tab_widget.tabText(index) != "Inicio":
+            self.tab_widget.removeTab(index)
+            # If closing the current tab, switch to welcome tab
+            if index == self.tab_widget.currentIndex():
+                self.tab_widget.setCurrentIndex(0)
 
     def apply_theme(self):
+        """Apply the current theme settings to the application."""
         theme = self.settings_manager.get_setting("theme")
         font_size = self.settings_manager.get_setting("font_size")
         accent_color = self.settings_manager.get_setting("accent_color")
@@ -2415,64 +2348,71 @@ class MainWindow(QMainWindow):
         return f"#{r:02x}{g:02x}{b:02x}"
 
     def on_settings_changed(self):
+        """Handle settings changes."""
         self.apply_theme()
         self.backup_manager.start_backup_timer()
 
-    def show_backup_message(self, message):
-        QMessageBox.information(self, "Backup", message)
-
-    def show_backup_error(self, error):
-        QMessageBox.critical(self, "Error de Backup", error)
-
-    def open_tab(self, title):
+    def open_tab(self, tab_name):
+        """Open a new tab or focus existing one."""
         # Check if tab already exists
         for i in range(self.tab_widget.count()):
-            if self.tab_widget.tabText(i) == title:
+            if self.tab_widget.tabText(i) == tab_name:
                 self.tab_widget.setCurrentIndex(i)
                 return
-        
-        # Create new tab
-        if title == "Inicio":
-            new_tab = WelcomeTab()
-        elif title == "Inventario":
-            new_tab = InventoryTab()
-        elif title == "Agregar Producto":
-            new_tab = AddProductTab()
-        elif title == "Actualizar Producto":
-            new_tab = UpdateProductTab()
-        elif title == "Clientes":
-            new_tab = ClientsTab()
-        elif title == "Agregar Cliente":
-            new_tab = AddClientTab()
-        elif title == "Actualizar Cliente":
-            new_tab = UpdateClientTab()
-        elif title == "Generar Factura":
-            new_tab = GenerateInvoiceTab(self.settings_manager)
-        elif title == "Administrar Facturas":
-            new_tab = ManageInvoicesTab()
-        elif title == "Reportes de Ventas":
-            new_tab = SalesReportTab()
-        elif title == "Historial de Compras":
-            new_tab = PurchaseHistoryTab()
-        elif title == "Settings":
-            new_tab = SettingsTab(self.settings_manager)
-        else:
-            new_tab = QWidget()
-        
-        # Add tab
-        index = self.tab_widget.addTab(new_tab, title)
-        self.tab_widget.setCurrentIndex(index)
 
-    def close_tab(self, index):
-        if self.tab_widget.tabText(index) != "Inicio":
-            self.tab_widget.removeTab(index)
-            # If closing the current tab, switch to welcome tab
-            if index == self.tab_widget.currentIndex():
-                self.tab_widget.setCurrentIndex(0)
-            # Uncheck all menu buttons when returning to welcome tab
-            if self.tab_widget.currentIndex() == 0:
-                for btn in self.menu_buttons.values():
-                    btn.setChecked(False)
+        # Create new tab
+        if tab_name == "Inicio":
+            tab = WelcomeTab()
+        elif tab_name == "Inventario":
+            tab = InventoryTab()
+        elif tab_name == "Agregar Producto":
+            tab = AddProductTab()
+        elif tab_name == "Actualizar Producto":
+            tab = UpdateProductTab()
+        elif tab_name == "Clientes":
+            tab = ClientsTab()
+        elif tab_name == "Agregar Cliente":
+            tab = AddClientTab()
+        elif tab_name == "Actualizar Cliente":
+            tab = UpdateClientTab()
+        elif tab_name == "Generar Factura":
+            tab = GenerateInvoiceTab(self.settings_manager)
+        elif tab_name == "Administrar Facturas":
+            tab = ManageInvoicesTab()
+        elif tab_name == "Reportes de Ventas":
+            tab = SalesReportTab()
+        elif tab_name == "Historial de Compras":
+            tab = PurchaseHistoryTab()
+        elif tab_name == "Settings":
+            tab = SettingsTab(self.settings_manager, self)
+            tab_name = "Configuración"
+        else:
+            return
+
+        # Add new tab
+        self.tab_widget.addTab(tab, tab_name)
+        self.tab_widget.setCurrentWidget(tab)
+
+    def refresh_all_tabs(self):
+        """Refresh all open tabs after restoring a backup."""
+        for i in range(self.tab_widget.count()):
+            widget = self.tab_widget.widget(i)
+            tab_text = self.tab_widget.tabText(i)
+            
+            # Call appropriate refresh method based on tab type
+            if isinstance(widget, InventoryTab):
+                widget.load_products()
+            elif isinstance(widget, ClientsTab):
+                widget.load_clients()
+            elif isinstance(widget, ManageInvoicesTab):
+                widget.load_invoices()
+            elif isinstance(widget, GenerateInvoiceTab):
+                widget.load_clients()
+                widget.load_products()
+            elif isinstance(widget, SalesReportTab):
+                widget.generate_report()
+            elif isinstance(widget, PurchaseHistoryTab):
+                widget.load_clients()
 
 def main():
     app = QApplication(sys.argv)
