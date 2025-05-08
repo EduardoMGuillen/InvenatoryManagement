@@ -1,0 +1,12 @@
+Factura N°: 14
+Fecha: 2025-05-07 07:06:19
+Cliente: Eduardo Antonio Bonilla (ID: 23)
+
+Detalle de productos:
+Cantidad  Nombre                        N° Serie       Precio         Subtotal       
+-------------------------------------------------------------------------------------
+8         Alicate Universal             SN1005         L 7.99         L 63.92        
+-------------------------------------------------------------------------------------
+Subtotal: L 63.92
+ISV (15.0%): L 9.59
+Total: L 73.51

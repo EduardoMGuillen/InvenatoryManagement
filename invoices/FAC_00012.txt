@@ -1,0 +1,12 @@
+Factura N°: 12
+Fecha: 2025-05-07 07:01:06
+Cliente: Alberto José Núñez (ID: 21)
+
+Detalle de productos:
+Cantidad  Nombre                        N° Serie       Precio         Subtotal       
+-------------------------------------------------------------------------------------
+3         Alicate Universal             SN1005         L 7.99         L 23.97        
+-------------------------------------------------------------------------------------
+Subtotal: L 23.97
+ISV (15.0%): L 3.60
+Total: L 27.57

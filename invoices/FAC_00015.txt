@@ -1,0 +1,13 @@
+Factura N°: 15
+Fecha: 2025-05-07 07:23:25
+Cliente: Alberto José Núñez (ID: 21)
+
+Detalle de productos:
+Cantidad  Nombre                        N° Serie       Precio         Subtotal       
+-------------------------------------------------------------------------------------
+2         Alicate Universal             SN1005         L 7.99         L 15.98        
+4         Broca para Concreto 6mm       SN1010         L 2.00         L 8.00         
+-------------------------------------------------------------------------------------
+Subtotal: L 23.98
+ISV (15.0%): L 3.60
+Total: L 27.58

@@ -1,0 +1,13 @@
+Factura N°: 13
+Fecha: 2025-05-07 07:01:15
+Cliente: José Manuel Ramírez (ID: 9)
+
+Detalle de productos:
+Cantidad  Nombre                        N° Serie       Precio         Subtotal       
+-------------------------------------------------------------------------------------
+2         Casco de Seguridad            SN1014         L 15.99        L 31.98        
+16        Cinta Aislante                SN1016         L 1.50         L 24.00        
+-------------------------------------------------------------------------------------
+Subtotal: L 55.98
+ISV (15.0%): L 8.40
+Total: L 64.38

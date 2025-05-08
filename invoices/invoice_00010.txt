@@ -1,0 +1,16 @@
+Factura N°: 10
+Fecha: 2025-05-07 05:58:37
+Cliente: Alberto José Núñez (ID: 21)
+
+Detalle de productos:
+Cantidad  Nombre                        N° Serie       Precio         Subtotal       
+-------------------------------------------------------------------------------------
+2         Alicate Universal             SN1005         LPS 7.99        LPS 15.98       
+3         Broca para Concreto 6mm       SN1010         LPS 2.00        LPS 6.00        
+2         Caja de Herramientas          SN1011         LPS 19.99       LPS 39.98       
+1         Carretilla de Obra            SN1018         LPS 69.99       LPS 69.99       
+
+
+Subtotal:           LPS 131.95
+ISV (15%):          LPS 19.79
+Total:              LPS 151.74
